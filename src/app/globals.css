@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 240 33% 98%; /* #F8F8FC - Surface */
+    --foreground: 240 20% 22%; /* #2E2E45 - Body */
+    --card: 0 0% 100%;
+    --card-foreground: 240 27% 8%; /* #0F0F1A - Dark */
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 27% 8%;
+    --primary: 238 82% 65%; /* #5B5FED - Indigo */
+    --primary-foreground: 233 100% 97%; /* #EEF0FF - Indigo Light */
+    --secondary: 233 100% 97%; /* Indigo Light */
+    --secondary-foreground: 238 82% 65%;
+    --muted: 240 12% 92%; /* #E4E4EF - Border/Muted */
+    --muted-foreground: 240 11% 47%; /* #6B6B85 - Muted text */
+    --accent: 233 100% 97%;
+    --accent-foreground: 238 82% 65%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 21% 92%;
+    --input: 240 21% 92%;
+    --ring: 238 82% 65%;
+    --radius: 0.75rem;
+    --chart-1: 238 82% 65%;
+    --chart-2: 199 89% 36%; /* #1472A5 - Cerulean Accent */
+    --chart-3: 161 94% 30%; /* #059669 - Green */
+    --chart-4: 38 92% 50%; /* #D97706 - Amber */
+    --chart-5: 238 82% 75%;
+  }
+
+  .dark {
+    --background: 240 27% 8%;
+    --foreground: 240 33% 98%;
+    --card: 240 27% 8%;
+    --card-foreground: 0 0% 100%;
+    --popover: 240 27% 8%;
+    --popover-foreground: 0 0% 100%;
+    --primary: 238 82% 65%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 20% 22%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 240 20% 22%;
+    --muted-foreground: 240 11% 65%;
+    --accent: 240 20% 22%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 20% 22%;
+    --input: 240 20% 22%;
+    --ring: 238 82% 65%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-headline text-card-foreground;
+  }
+}
+
+.linna-gradient {
+  background: linear-gradient(135deg, #5B5FED 0%, #1472A5 100%);
+}
+
+.chat-bubble-user {
+  @apply bg-primary text-primary-foreground rounded-2xl rounded-tr-none px-4 py-2 max-w-[80%] ml-auto;
+}
+
+.chat-bubble-ai {
+  @apply bg-white border border-border text-foreground rounded-2xl rounded-tl-none px-4 py-2 max-w-[80%] mr-auto;
+}
