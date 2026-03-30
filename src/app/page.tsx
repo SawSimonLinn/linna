@@ -1,8 +1,14 @@
+import { auth } from '@clerk/nextjs/server';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { LinnaMark } from '@/components/linna-mark';
 import { Github, Sparkles, MessageSquare, Zap, Layers, History, ShieldCheck, ChevronRight } from 'lucide-react';
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const { userId } = await auth();
+  const primaryHref = userId ? '/dashboard' : '/sign-up';
+  const primaryLabel = userId ? 'Go to dashboard' : 'Get started free';
+
   return (
     <div className="flex flex-col min-h-screen">
       {/* Navbar */}
@@ -10,7 +16,7 @@ export default function LandingPage() {
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-8">
             <Link href="/" className="font-headline text-2xl font-bold text-primary flex items-center gap-2">
-              <Sparkles className="w-6 h-6" />
+              <LinnaMark className="w-6 h-6" />
               Linna
             </Link>
             <nav className="hidden md:flex items-center gap-6">
@@ -26,7 +32,7 @@ export default function LandingPage() {
               <span className="bg-muted px-2 py-0.5 rounded text-xs text-muted-foreground">1.2k</span>
             </Link>
             <Button asChild variant="default" className="rounded-full px-6">
-              <Link href="/dashboard">Get started free</Link>
+              <Link href={primaryHref}>{primaryLabel}</Link>
             </Button>
           </div>
         </div>
@@ -49,8 +55,8 @@ export default function LandingPage() {
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Button asChild size="lg" className="rounded-full px-8 h-12 text-base">
-                <Link href="/dashboard">
-                  Get started free
+                <Link href={primaryHref}>
+                  {primaryLabel}
                   <ChevronRight className="w-4 h-4 ml-1" />
                 </Link>
               </Button>
@@ -149,7 +155,9 @@ export default function LandingPage() {
                   <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary" /> 7 Days chat history</li>
                   <li className="text-muted-foreground line-through">Launch Assistant</li>
                 </ul>
-                <Button variant="outline" className="w-full rounded-full">Start free</Button>
+                <Button variant="outline" className="w-full rounded-full" asChild>
+                  <Link href={primaryHref}>Start free</Link>
+                </Button>
               </div>
               {/* Pro */}
               <div className="bg-white p-8 rounded-2xl border-2 border-primary relative">

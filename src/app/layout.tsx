@@ -1,6 +1,8 @@
 import type {Metadata} from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
+import { ClerkProvider } from '@clerk/nextjs'
+import { AppAuthHeader } from '@/components/app-auth-header'
 
 export const metadata: Metadata = {
   title: 'Linna | Your project has a memory now.',
@@ -20,8 +22,11 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Source+Code+Pro:wght@400;500&display=swap" rel="stylesheet" />
       </head>
       <body className="font-body antialiased selection:bg-primary/20">
-        {children}
-        <Toaster />
+        <ClerkProvider>
+          <AppAuthHeader />
+          {children}
+          <Toaster />
+        </ClerkProvider>
       </body>
     </html>
   );

@@ -1,8 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
+import { SignOutButton, UserButton, useUser } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
+import { LinnaMark } from '@/components/linna-mark';
 import { 
   LayoutDashboard, 
   Settings, 
@@ -10,15 +12,14 @@ import {
   Search, 
   Bell, 
   LogOut, 
-  Sparkles,
   ChevronRight,
   TrendingUp,
   MessageCircle,
   FolderKanban
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { 
-  Sidebar, 
+import {
+  Sidebar,
   SidebarContent, 
   SidebarFooter, 
   SidebarHeader, 
@@ -31,20 +32,33 @@ import {
   SidebarSeparator
 } from '@/components/ui/sidebar';
 import { useEffect, useState } from 'react';
-import { getProjects, Project } from '@/app/lib/mock-data';
+import type { Project } from '@/lib/projects/types';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [projects, setProjects] = useState<Project[]>([]);
-  const router = useRouter();
+  const { user } = useUser();
 
   useEffect(() => {
-    setProjects(getProjects());
+    const loadProjects = async () => {
+      const response = await fetch('/api/projects', { cache: 'no-store' });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const data = (await response.json()) as Project[];
+      setProjects(data);
+    };
+
+    void loadProjects();
   }, [pathname]);
 
   const navItems = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   ];
+  const userName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username || user?.primaryEmailAddress?.emailAddress || 'Account';
+  const userInitials = [user?.firstName?.[0], user?.lastName?.[0]].filter(Boolean).join('').toUpperCase() || userName.slice(0, 2).toUpperCase();
 
   return (
     <SidebarProvider defaultOpen={true}>
@@ -53,7 +67,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <Sidebar className="border-r border-border bg-white">
           <SidebarHeader className="p-6">
             <Link href="/dashboard" className="font-headline text-2xl font-bold text-primary flex items-center gap-2">
-              <Sparkles className="w-6 h-6" />
+              <LinnaMark className="w-6 h-6" />
               Linna
             </Link>
           </SidebarHeader>
@@ -120,16 +134,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
             <div className="flex items-center gap-3">
               <Avatar className="h-9 w-9 border border-border">
-                <AvatarImage src="https://picsum.photos/seed/user/100/100" />
-                <AvatarFallback>SL</AvatarFallback>
+                <AvatarImage src={user?.imageUrl} />
+                <AvatarFallback>{userInitials}</AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold truncate">Simon Linn</p>
+                <p className="text-sm font-bold truncate">{userName}</p>
                 <p className="text-[10px] text-muted-foreground truncate">Free Plan</p>
               </div>
-              <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                <Link href="/"><LogOut className="w-4 h-4" /></Link>
-              </Button>
+              <SignOutButton>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <LogOut className="w-4 h-4" />
+                </Button>
+              </SignOutButton>
             </div>
           </SidebarFooter>
         </Sidebar>
@@ -149,10 +165,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <Button variant="ghost" size="icon" className="rounded-full text-muted-foreground">
                 <Bell className="w-5 h-5" />
               </Button>
-              <Avatar className="h-8 w-8 border">
-                <AvatarImage src="https://picsum.photos/seed/user/100/100" />
-                <AvatarFallback>SL</AvatarFallback>
-              </Avatar>
+              <UserButton />
             </div>
           </header>
           <main className="flex-1 overflow-auto p-6 lg:p-10">

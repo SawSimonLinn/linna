@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { LinnaMark } from '@/components/linna-mark';
 import { 
   Plus, 
   MoreVertical, 
   MessageSquare, 
   Clock, 
-  Sparkles,
   Archive,
   Trash2,
   Edit2
@@ -38,13 +38,14 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { getProjects, saveProject, deleteProject, Project } from '@/app/lib/mock-data';
 import { formatDistanceToNow } from 'date-fns';
+import type { NewProjectInput, Project } from '@/lib/projects/types';
 
 export default function Dashboard() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newProject, setNewProject] = useState<Partial<Project>>({
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [newProject, setNewProject] = useState<NewProjectInput>({
     name: '',
     description: '',
     techStack: '',
@@ -54,34 +55,77 @@ export default function Dashboard() {
   });
 
   useEffect(() => {
-    setProjects(getProjects());
+    void loadProjects();
   }, []);
 
-  const handleCreateProject = () => {
-    if (!newProject.name) return;
-    
-    const project: Project = {
-      id: Math.random().toString(36).substr(2, 9),
-      name: newProject.name!,
-      description: newProject.description || '',
-      techStack: newProject.techStack || '',
-      goals: newProject.goals || '',
-      blockers: newProject.blockers || '',
-      targetUser: newProject.targetUser || '',
-      lastActive: new Date().toISOString(),
-      messageCount: 0,
-    };
-    
-    saveProject(project);
-    setProjects(getProjects());
+  const loadProjects = async () => {
+    const response = await fetch('/api/projects', { cache: 'no-store' });
+
+    if (!response.ok) {
+      return;
+    }
+
+    const data = (await response.json()) as Project[];
+    setProjects(data);
+  };
+
+  const handleCreateProject = async () => {
+    if (!newProject.name.trim()) return;
+
+    const isEditing = editingProjectId !== null;
+    const response = await fetch(isEditing ? `/api/projects/${editingProjectId}` : '/api/projects', {
+      method: isEditing ? 'PATCH' : 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(newProject),
+    });
+
+    if (!response.ok) {
+      return;
+    }
+
+    const project = (await response.json()) as Project;
+
+    if (isEditing) {
+      setProjects((currentProjects) =>
+        currentProjects.map((currentProject) =>
+          currentProject.id === project.id ? project : currentProject,
+        ),
+      );
+    } else {
+      setProjects((currentProjects) => [project, ...currentProjects]);
+    }
+
     setIsModalOpen(false);
+    setEditingProjectId(null);
     setNewProject({ name: '', description: '', techStack: '', goals: '', blockers: '', targetUser: '' });
   };
 
-  const handleDelete = (id: string) => {
+  const handleEdit = (project: Project) => {
+    setEditingProjectId(project.id);
+    setNewProject({
+      name: project.name,
+      description: project.description,
+      techStack: project.techStack,
+      goals: project.goals,
+      blockers: project.blockers,
+      targetUser: project.targetUser,
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleDelete = async (id: string) => {
     if (confirm('Are you sure you want to delete this project?')) {
-      deleteProject(id);
-      setProjects(getProjects());
+      const response = await fetch(`/api/projects/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      setProjects((currentProjects) => currentProjects.filter((project) => project.id !== id));
     }
   };
 
@@ -92,7 +136,17 @@ export default function Dashboard() {
           <h1 className="text-3xl font-headline font-bold mb-1">Your Projects</h1>
           <p className="text-body text-sm">Create and manage your project contexts.</p>
         </div>
-        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <Dialog
+          open={isModalOpen}
+          onOpenChange={(open) => {
+            setIsModalOpen(open);
+
+            if (!open) {
+              setEditingProjectId(null);
+              setNewProject({ name: '', description: '', techStack: '', goals: '', blockers: '', targetUser: '' });
+            }
+          }}
+        >
           <DialogTrigger asChild>
             <Button className="rounded-full px-6">
               <Plus className="w-4 h-4 mr-2" />
@@ -101,7 +155,9 @@ export default function Dashboard() {
           </DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle className="text-xl font-headline font-bold">New Project</DialogTitle>
+              <DialogTitle className="text-xl font-headline font-bold">
+                {editingProjectId ? 'Edit Project' : 'New Project'}
+              </DialogTitle>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
@@ -160,7 +216,9 @@ export default function Dashboard() {
               </div>
             </div>
             <DialogFooter>
-              <Button onClick={handleCreateProject} className="w-full">Create Project</Button>
+              <Button onClick={handleCreateProject} className="w-full">
+                {editingProjectId ? 'Save Changes' : 'Create Project'}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -169,7 +227,7 @@ export default function Dashboard() {
       {projects.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-32 bg-white rounded-3xl border border-dashed border-border text-center px-4">
           <div className="w-16 h-16 rounded-3xl bg-surface flex items-center justify-center mb-6">
-            <Sparkles className="w-8 h-8 text-primary" />
+            <LinnaMark className="w-8 h-8 text-primary" />
           </div>
           <h2 className="text-xl font-bold mb-2">No projects yet.</h2>
           <p className="text-body text-sm mb-8 max-w-sm">Create your first project and give Linna the context it needs to start assisting you.</p>
@@ -192,7 +250,7 @@ export default function Dashboard() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleEdit(project)}>
                       <Edit2 className="w-4 h-4 mr-2" /> Edit Context
                     </DropdownMenuItem>
                     <DropdownMenuItem>
@@ -208,7 +266,7 @@ export default function Dashboard() {
                 <CardContent className="pb-4">
                   <p className="text-xs text-body line-clamp-2 mb-4 h-8">{project.description}</p>
                   <div className="flex flex-wrap gap-2">
-                    {project.techStack.split(',').map((tag, i) => (
+                    {project.techStack.split(',').filter(Boolean).map((tag, i) => (
                       <Badge key={i} variant="secondary" className="bg-surface text-[10px] py-0 px-2 font-medium">
                         {tag.trim()}
                       </Badge>

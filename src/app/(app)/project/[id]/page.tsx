@@ -1,21 +1,18 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { LinnaMark } from '@/components/linna-mark';
 import { 
-  Plus, 
   Send, 
   Paperclip, 
   Settings, 
-  Sparkles,
   ChevronLeft,
-  ChevronRight,
   Info,
   Edit3,
   Rocket
 } from 'lucide-react';
-import { getProjects, getMessages, addMessage, Project, Message } from '@/app/lib/mock-data';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { contextAwareChat } from '@/ai/flows/context-aware-chat-flow';
@@ -27,6 +24,7 @@ import {
 } from "@/components/ui/accordion";
 import Link from 'next/link';
 import { format } from 'date-fns';
+import type { Message, Project } from '@/lib/projects/types';
 
 export default function ProjectChatPage() {
   const { id } = useParams() as { id: string };
@@ -37,11 +35,26 @@ export default function ProjectChatPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const p = getProjects().find(proj => proj.id === id);
-    if (p) {
-      setProject(p);
-      setMessages(getMessages(id));
-    }
+    const loadProject = async () => {
+      const [projectResponse, messagesResponse] = await Promise.all([
+        fetch(`/api/projects/${id}`, { cache: 'no-store' }),
+        fetch(`/api/projects/${id}/messages`, { cache: 'no-store' }),
+      ]);
+
+      if (!projectResponse.ok || !messagesResponse.ok) {
+        return;
+      }
+
+      const [projectData, messagesData] = await Promise.all([
+        projectResponse.json() as Promise<Project>,
+        messagesResponse.json() as Promise<Message[]>,
+      ]);
+
+      setProject(projectData);
+      setMessages(messagesData);
+    };
+
+    void loadProject();
   }, [id]);
 
   useEffect(() => {
@@ -57,12 +70,25 @@ export default function ProjectChatPage() {
     setInput('');
     setIsLoading(true);
 
-    // Add user message
-    const userMsg = addMessage(id, 'user', userText);
-    setMessages([...messages, userMsg]);
-
     try {
-      // Call AI flow
+      const userMessageResponse = await fetch(`/api/projects/${id}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          role: 'user',
+          content: userText,
+        }),
+      });
+
+      if (!userMessageResponse.ok) {
+        throw new Error('Failed to save the user message.');
+      }
+
+      const userMsg = (await userMessageResponse.json()) as Message;
+      setMessages((currentMessages) => [...currentMessages, userMsg]);
+
       const result = await contextAwareChat({
         techStack: project.techStack,
         goals: project.goals,
@@ -70,13 +96,59 @@ export default function ProjectChatPage() {
         userMessage: userText
       });
 
-      // Add assistant message
-      const aiMsg = addMessage(id, 'assistant', result.response);
+      const assistantMessageResponse = await fetch(`/api/projects/${id}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          role: 'assistant',
+          content: result.response,
+        }),
+      });
+
+      if (!assistantMessageResponse.ok) {
+        throw new Error('Failed to save the assistant message.');
+      }
+
+      const aiMsg = (await assistantMessageResponse.json()) as Message;
       setMessages(prev => [...prev, aiMsg]);
+      setProject((currentProject) =>
+        currentProject
+          ? {
+              ...currentProject,
+              lastActive: aiMsg.createdAt,
+              messageCount: currentProject.messageCount + 2,
+            }
+          : currentProject,
+      );
     } catch (error) {
       console.error('Chat error:', error);
-      const errorMsg = addMessage(id, 'assistant', "I'm sorry, I encountered an error. Please try again.");
-      setMessages(prev => [...prev, errorMsg]);
+
+      const errorResponse = await fetch(`/api/projects/${id}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          role: 'assistant',
+          content: "I'm sorry, I encountered an error. Please try again.",
+        }),
+      });
+
+      if (errorResponse.ok) {
+        const errorMsg = (await errorResponse.json()) as Message;
+        setMessages(prev => [...prev, errorMsg]);
+        setProject((currentProject) =>
+          currentProject
+            ? {
+                ...currentProject,
+                lastActive: errorMsg.createdAt,
+                messageCount: currentProject.messageCount + 2,
+              }
+            : currentProject,
+        );
+      }
     } finally {
       setIsLoading(false);
     }
@@ -102,7 +174,7 @@ export default function ProjectChatPage() {
             </div>
             <h1 className="text-2xl font-headline font-bold text-dark mb-4">{project.name}</h1>
             <div className="flex flex-wrap gap-2 mb-4">
-              {project.techStack.split(',').map((tag, i) => (
+              {project.techStack.split(',').filter(Boolean).map((tag, i) => (
                 <Badge key={i} variant="secondary" className="bg-indigo-light text-primary text-[10px]">
                   {tag.trim()}
                 </Badge>
@@ -176,7 +248,7 @@ export default function ProjectChatPage() {
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center max-w-lg mx-auto py-20">
               <div className="w-16 h-16 rounded-3xl bg-indigo-light flex items-center justify-center mb-6">
-                <Sparkles className="w-8 h-8 text-primary" />
+                <LinnaMark className="w-8 h-8 text-primary" />
               </div>
               <h2 className="text-2xl font-headline font-bold mb-3">Hey, I'm Linna. I know your project.</h2>
               <p className="text-body text-sm mb-10">Ask me anything — architecture decisions, what to build next, or how to fix a bug. I have full context of your goals and stack.</p>

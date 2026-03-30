@@ -1,11 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { LinnaMark } from '@/components/linna-mark';
 import { 
   ChevronLeft, 
-  Sparkles, 
   Copy, 
   RefreshCw, 
   Check,
@@ -17,12 +17,11 @@ import {
   Layout,
   Globe
 } from 'lucide-react';
-import { getProjects, Project } from '@/app/lib/mock-data';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { generateLaunchContent, GenerateLaunchContentOutput } from '@/ai/flows/generate-launch-content';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from '@/hooks/use-toast';
 import Link from 'next/link';
+import type { Project } from '@/lib/projects/types';
 
 export default function LaunchAssistantPage() {
   const { id } = useParams() as { id: string };
@@ -33,10 +32,18 @@ export default function LaunchAssistantPage() {
   const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
-    const p = getProjects().find(proj => proj.id === id);
-    if (p) {
-      setProject(p);
-    }
+    const loadProject = async () => {
+      const response = await fetch(`/api/projects/${id}`, { cache: 'no-store' });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const projectData = (await response.json()) as Project;
+      setProject(projectData);
+    };
+
+    void loadProject();
   }, [id]);
 
   const handleGenerate = async () => {
@@ -101,7 +108,7 @@ export default function LaunchAssistantPage() {
             {isGenerating ? (
               <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
             ) : (
-              <Sparkles className="w-5 h-5 mr-2" />
+              <LinnaMark className="w-5 h-5 mr-2" />
             )}
             {content ? 'Regenerate Content' : 'Generate with Linna'}
           </Button>
