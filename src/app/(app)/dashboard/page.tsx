@@ -10,6 +10,7 @@ import {
   MessageSquare,
   MoreVertical,
   Plus,
+  RefreshCw,
   Trash2,
 } from 'lucide-react';
 import type { NewProjectInput, Project } from '@/lib/projects/types';
@@ -46,6 +47,7 @@ export default function Dashboard() {
   });
   const [techTags, setTechTags] = useState<string[]>([]);
   const [techInput, setTechInput] = useState('');
+  const [openingProjectId, setOpeningProjectId] = useState<string | null>(null);
 
   useEffect(() => {
     void loadProjects();
@@ -350,22 +352,96 @@ export default function Dashboard() {
                 const tags = project.techStack.split(',').map((t) => t.trim()).filter(Boolean).slice(0, 4);
                 const cardColor = CARD_COLORS[index % CARD_COLORS.length];
                 const tiltClass = index % 3 === 1 ? 'rotate-[0.4deg]' : index % 3 === 2 ? 'rotate-[-0.3deg]' : '';
+                const isOpening = openingProjectId === project.id;
+                const isAnotherProjectOpening = openingProjectId !== null && !isOpening;
 
                 return (
-                  <div
-                    key={project.id}
-                    className={`${cardColor} ${tiltClass} border-2 border-foreground paper-shadow hover:paper-shadow-sm hover:translate-x-[4px] hover:translate-y-[4px] transition-all duration-150 flex flex-col`}
-                  >
-                    {/* Card header */}
-                    <div className="flex items-start justify-between gap-2 p-5 pb-3">
-                      <div className="min-w-0 flex-1">
-                        <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-foreground/40">
-                          {String(index + 1).padStart(2, '0')}
-                        </span>
-                        <h3 className="font-headline text-xl font-bold leading-tight mt-1 truncate">
-                          {project.name}
-                        </h3>
+                  <div key={project.id} className={`relative ${isAnotherProjectOpening ? 'opacity-60' : ''}`}>
+                    <Link
+                      href={`/project/${project.id}`}
+                      aria-busy={isOpening}
+                      onNavigate={() => setOpeningProjectId((current) => current ?? project.id)}
+                      className={`${cardColor} ${tiltClass} ${
+                        isOpening
+                          ? 'paper-shadow-sm translate-x-[4px] translate-y-[4px]'
+                          : 'paper-shadow hover:paper-shadow-sm hover:translate-x-[4px] hover:translate-y-[4px]'
+                      } ${
+                        isAnotherProjectOpening ? 'pointer-events-none' : ''
+                      } relative flex h-full flex-col border-2 border-foreground transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-paper`}
+                    >
+                      {/* Card header */}
+                      <div className="p-5 pb-3 pr-14">
+                        <div className="min-w-0">
+                          <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-foreground/40">
+                            {String(index + 1).padStart(2, '0')}
+                          </span>
+                          <h3 className="mt-1 truncate font-headline text-xl font-bold leading-tight">
+                            {project.name}
+                          </h3>
+                        </div>
                       </div>
+
+                      {/* Description */}
+                      {project.description ? (
+                        <p className="px-5 font-mono text-xs text-foreground/60 line-clamp-2 leading-relaxed">
+                          {project.description}
+                        </p>
+                      ) : null}
+
+                      {/* Tags */}
+                      {tags.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5 px-5 pt-3">
+                          {tags.map((tag) => (
+                            <span
+                              key={tag}
+                              className="border border-foreground/30 bg-white/60 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.1em] text-foreground/60"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+
+                      {/* Card footer */}
+                      <div className="mt-auto flex items-center justify-between border-t-2 border-foreground/20 px-5 py-3">
+                        <div className="flex items-center gap-3 font-mono text-[10px] text-foreground/45">
+                          <span className="flex items-center gap-1">
+                            <MessageSquare className="h-3 w-3" />
+                            {project.messageCount}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            {isOpening ? (
+                              <>
+                                <RefreshCw className="h-3 w-3 animate-spin" />
+                                Opening...
+                              </>
+                            ) : (
+                              <>
+                                <Clock className="h-3 w-3" />
+                                {formatDistanceToNow(new Date(project.lastActive))} ago
+                              </>
+                            )}
+                          </span>
+                        </div>
+                        <span className="flex h-7 w-7 items-center justify-center rounded-none border-2 border-foreground bg-foreground text-background">
+                          {isOpening ? (
+                            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <ArrowUpRight className="h-3.5 w-3.5" />
+                          )}
+                        </span>
+                      </div>
+
+                      {isOpening ? (
+                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-paper/45">
+                          <div className="border-2 border-foreground bg-white px-4 py-2 font-mono text-[10px] uppercase tracking-[0.3em] paper-shadow-sm">
+                            Opening project
+                          </div>
+                        </div>
+                      ) : null}
+                    </Link>
+
+                    <div className="absolute right-5 top-5 z-10">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
@@ -396,51 +472,6 @@ export default function Dashboard() {
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
-                    </div>
-
-                    {/* Description */}
-                    {project.description ? (
-                      <p className="px-5 font-mono text-xs text-foreground/60 line-clamp-2 leading-relaxed">
-                        {project.description}
-                      </p>
-                    ) : null}
-
-                    {/* Tags */}
-                    {tags.length > 0 ? (
-                      <div className="px-5 pt-3 flex flex-wrap gap-1.5">
-                        {tags.map((tag) => (
-                          <span
-                            key={tag}
-                            className="border border-foreground/30 bg-white/60 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.1em] text-foreground/60"
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-
-                    {/* Card footer */}
-                    <div className="mt-auto border-t-2 border-foreground/20 px-5 py-3 flex items-center justify-between">
-                      <div className="flex items-center gap-3 font-mono text-[10px] text-foreground/45">
-                        <span className="flex items-center gap-1">
-                          <MessageSquare className="h-3 w-3" />
-                          {project.messageCount}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          {formatDistanceToNow(new Date(project.lastActive))} ago
-                        </span>
-                      </div>
-                      <Button
-                        asChild
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 rounded-none border-2 border-foreground bg-foreground text-background hover:bg-foreground/80"
-                      >
-                        <Link href={`/project/${project.id}`}>
-                          <ArrowUpRight className="h-3.5 w-3.5" />
-                        </Link>
-                      </Button>
                     </div>
                   </div>
                 );
