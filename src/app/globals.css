@@ -4,53 +4,70 @@
 
 @layer base {
   :root {
-    --background: 240 33% 98%; /* #F8F8FC - Surface */
-    --foreground: 240 20% 22%; /* #2E2E45 - Body */
+    --background: 0 0% 100%;
+    --paper: 48 100% 98%;
+    --foreground: 0 0% 4%;
     --card: 0 0% 100%;
-    --card-foreground: 240 27% 8%; /* #0F0F1A - Dark */
+    --card-foreground: 0 0% 4%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 27% 8%;
-    --primary: 238 82% 65%; /* #5B5FED - Indigo */
-    --primary-foreground: 233 100% 97%; /* #EEF0FF - Indigo Light */
-    --secondary: 233 100% 97%; /* Indigo Light */
-    --secondary-foreground: 238 82% 65%;
-    --muted: 240 12% 92%; /* #E4E4EF - Border/Muted */
-    --muted-foreground: 240 11% 47%; /* #6B6B85 - Muted text */
-    --accent: 233 100% 97%;
-    --accent-foreground: 238 82% 65%;
+    --popover-foreground: 0 0% 4%;
+    --primary: 0 0% 4%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 4%;
+    --muted: 0 0% 94%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 0 0% 94%;
+    --accent-foreground: 0 0% 4%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 21% 92%;
-    --input: 240 21% 92%;
-    --ring: 238 82% 65%;
-    --radius: 0.75rem;
-    --chart-1: 238 82% 65%;
-    --chart-2: 199 89% 36%; /* #1472A5 - Cerulean Accent */
-    --chart-3: 161 94% 30%; /* #059669 - Green */
-    --chart-4: 38 92% 50%; /* #D97706 - Amber */
-    --chart-5: 238 82% 75%;
+    --border: 0 0% 85%;
+    --input: 0 0% 85%;
+    --ring: 0 0% 4%;
+    --radius: 0rem;
+    --chart-1: 0 0% 10%;
+    --chart-2: 0 0% 30%;
+    --chart-3: 0 0% 50%;
+    --chart-4: 0 0% 65%;
+    --chart-5: 0 0% 80%;
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 0 0% 4%;
+    --sidebar-primary: 0 0% 4%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 93%;
+    --sidebar-accent-foreground: 0 0% 4%;
+    --sidebar-border: 0 0% 88%;
+    --sidebar-ring: 0 0% 4%;
   }
 
   .dark {
-    --background: 240 27% 8%;
-    --foreground: 240 33% 98%;
-    --card: 240 27% 8%;
-    --card-foreground: 0 0% 100%;
-    --popover: 240 27% 8%;
-    --popover-foreground: 0 0% 100%;
-    --primary: 238 82% 65%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 240 20% 22%;
-    --secondary-foreground: 0 0% 100%;
-    --muted: 240 20% 22%;
-    --muted-foreground: 240 11% 65%;
-    --accent: 240 20% 22%;
-    --accent-foreground: 0 0% 100%;
+    --background: 0 0% 4%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 4%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 4%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 4%;
+    --secondary: 0 0% 10%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 10%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 0 0% 10%;
+    --accent-foreground: 0 0% 98%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 20% 22%;
-    --input: 240 20% 22%;
-    --ring: 238 82% 65%;
+    --border: 0 0% 15%;
+    --input: 0 0% 15%;
+    --ring: 0 0% 98%;
+    --sidebar-background: 0 0% 6%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 0 0% 98%;
+    --sidebar-primary-foreground: 0 0% 4%;
+    --sidebar-accent: 0 0% 10%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 0 0% 14%;
+    --sidebar-ring: 0 0% 98%;
   }
 }
 
@@ -63,18 +80,50 @@
     font-feature-settings: "rlig" 1, "calt" 1;
   }
   h1, h2, h3, h4, h5, h6 {
-    @apply font-headline text-card-foreground;
+    @apply font-headline;
   }
 }
 
-.linna-gradient {
-  background: linear-gradient(135deg, #5B5FED 0%, #1472A5 100%);
-}
-
 .chat-bubble-user {
-  @apply bg-primary text-primary-foreground rounded-2xl rounded-tr-none px-4 py-2 max-w-[80%] ml-auto;
+  @apply ml-auto bg-foreground px-5 py-4 text-background shadow-none;
 }
 
 .chat-bubble-ai {
-  @apply bg-white border border-border text-foreground rounded-2xl rounded-tl-none px-4 py-2 max-w-[80%] mr-auto;
+  @apply mr-auto border-2 border-foreground bg-background px-5 py-4 text-foreground shadow-none;
+}
+
+/* ── Paper design system ─────────────────────────────────────── */
+
+/* Hard offset shadows — the core paper effect */
+.paper-shadow-sm {
+  box-shadow: 2px 2px 0px 0px #111111;
+}
+.paper-shadow {
+  box-shadow: 4px 4px 0px 0px #111111;
+}
+.paper-shadow-lg {
+  box-shadow: 6px 6px 0px 0px #111111;
+}
+.paper-shadow-xl {
+  box-shadow: 8px 8px 0px 0px #111111;
+}
+
+/* Paper "press" buttons — light bg with shadow that collapses on hover */
+.paper-btn {
+  box-shadow: 3px 3px 0px 0px #111111;
+  transition: box-shadow 0.1s ease, transform 0.1s ease;
+}
+.paper-btn:hover {
+  box-shadow: none;
+  transform: translate(3px, 3px);
+}
+
+/* Dark (filled) button variant */
+.paper-btn-dark {
+  box-shadow: 3px 3px 0px 0px rgba(0, 0, 0, 0.4);
+  transition: box-shadow 0.1s ease, transform 0.1s ease;
+}
+.paper-btn-dark:hover {
+  box-shadow: none;
+  transform: translate(3px, 3px);
 }

@@ -1,45 +1,36 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { LinnaMark } from '@/components/linna-mark';
-import { 
-  Plus, 
-  MoreVertical, 
-  MessageSquare, 
-  Clock, 
-  Archive,
-  Trash2,
-  Edit2
-} from 'lucide-react';
-import { 
-  Card, 
-  CardContent, 
-  CardFooter, 
-  CardHeader, 
-  CardTitle 
-} from '@/components/ui/card';
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuTrigger 
-} from '@/components/ui/dropdown-menu';
-import { Badge } from '@/components/ui/badge';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
+import { formatDistanceToNow } from 'date-fns';
+import {
+  ArrowUpRight,
+  Clock,
+  Edit2,
+  MessageSquare,
+  MoreVertical,
+  Plus,
+  Trash2,
+} from 'lucide-react';
+import type { NewProjectInput, Project } from '@/lib/projects/types';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
   DialogTrigger,
-  DialogFooter
 } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { formatDistanceToNow } from 'date-fns';
-import type { NewProjectInput, Project } from '@/lib/projects/types';
 
 export default function Dashboard() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -51,8 +42,10 @@ export default function Dashboard() {
     techStack: '',
     goals: '',
     blockers: '',
-    targetUser: ''
+    targetUser: '',
   });
+  const [techTags, setTechTags] = useState<string[]>([]);
+  const [techInput, setTechInput] = useState('');
 
   useEffect(() => {
     void loadProjects();
@@ -69,41 +62,52 @@ export default function Dashboard() {
     setProjects(data);
   };
 
+  const resetProjectForm = () => {
+    setEditingProjectId(null);
+    setTechTags([]);
+    setTechInput('');
+    setNewProject({
+      name: '',
+      description: '',
+      techStack: '',
+      goals: '',
+      blockers: '',
+      targetUser: '',
+    });
+  };
+
   const handleCreateProject = async () => {
     if (!newProject.name.trim()) return;
+
+    const allTags = techInput.trim() ? [...techTags, techInput.trim()] : techTags;
+    const payload = { ...newProject, techStack: allTags.join(', ') };
 
     const isEditing = editingProjectId !== null;
     const response = await fetch(isEditing ? `/api/projects/${editingProjectId}` : '/api/projects', {
       method: isEditing ? 'PATCH' : 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(newProject),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
     });
 
-    if (!response.ok) {
-      return;
-    }
+    if (!response.ok) return;
 
     const project = (await response.json()) as Project;
 
     if (isEditing) {
-      setProjects((currentProjects) =>
-        currentProjects.map((currentProject) =>
-          currentProject.id === project.id ? project : currentProject,
-        ),
-      );
+      setProjects((prev) => prev.map((p) => (p.id === project.id ? project : p)));
     } else {
-      setProjects((currentProjects) => [project, ...currentProjects]);
+      setProjects((prev) => [project, ...prev]);
     }
 
     setIsModalOpen(false);
-    setEditingProjectId(null);
-    setNewProject({ name: '', description: '', techStack: '', goals: '', blockers: '', targetUser: '' });
+    resetProjectForm();
   };
 
   const handleEdit = (project: Project) => {
     setEditingProjectId(project.id);
+    const tags = project.techStack.split(',').map((t) => t.trim()).filter(Boolean);
+    setTechTags(tags);
+    setTechInput('');
     setNewProject({
       name: project.name,
       description: project.description,
@@ -117,177 +121,343 @@ export default function Dashboard() {
 
   const handleDelete = async (id: string) => {
     if (confirm('Are you sure you want to delete this project?')) {
-      const response = await fetch(`/api/projects/${id}`, {
-        method: 'DELETE',
-      });
+      const response = await fetch(`/api/projects/${id}`, { method: 'DELETE' });
 
-      if (!response.ok) {
-        return;
-      }
+      if (!response.ok) return;
 
-      setProjects((currentProjects) => currentProjects.filter((project) => project.id !== id));
+      setProjects((prev) => prev.filter((p) => p.id !== id));
     }
   };
 
-  return (
-    <div className="max-w-7xl mx-auto">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-headline font-bold mb-1">Your Projects</h1>
-          <p className="text-body text-sm">Create and manage your project contexts.</p>
-        </div>
-        <Dialog
-          open={isModalOpen}
-          onOpenChange={(open) => {
-            setIsModalOpen(open);
+  const featuredProjects = useMemo(() => projects.slice(0, 6), [projects]);
 
-            if (!open) {
-              setEditingProjectId(null);
-              setNewProject({ name: '', description: '', techStack: '', goals: '', blockers: '', targetUser: '' });
-            }
-          }}
-        >
-          <DialogTrigger asChild>
-            <Button className="rounded-full px-6">
-              <Plus className="w-4 h-4 mr-2" />
-              New project
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-headline font-bold">
-                {editingProjectId ? 'Edit Project' : 'New Project'}
-              </DialogTitle>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="name">Project Name</Label>
-                <Input 
-                  id="name" 
-                  placeholder="e.g. Linna, My SaaS App" 
-                  value={newProject.name} 
-                  onChange={e => setNewProject({...newProject, name: e.target.value})} 
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="description">Description</Label>
-                <Input 
-                  id="description" 
-                  placeholder="One line — what are you building?" 
-                  value={newProject.description} 
-                  onChange={e => setNewProject({...newProject, description: e.target.value})} 
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="tech">Tech Stack</Label>
-                <Input 
-                  id="tech" 
-                  placeholder="e.g. Next.js, Supabase, Stripe" 
-                  value={newProject.techStack} 
-                  onChange={e => setNewProject({...newProject, techStack: e.target.value})} 
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="goals">Current Goals</Label>
-                <Textarea 
-                  id="goals" 
-                  placeholder="What are you trying to accomplish this week?" 
-                  value={newProject.goals} 
-                  onChange={e => setNewProject({...newProject, goals: e.target.value})} 
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="blockers">Known Blockers</Label>
-                <Textarea 
-                  id="blockers" 
-                  placeholder="What's slowing you down right now?" 
-                  value={newProject.blockers} 
-                  onChange={e => setNewProject({...newProject, blockers: e.target.value})} 
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="target">Target User</Label>
-                <Input 
-                  id="target" 
-                  placeholder="e.g. indie hackers, students" 
-                  value={newProject.targetUser} 
-                  onChange={e => setNewProject({...newProject, targetUser: e.target.value})} 
-                />
-              </div>
+  return (
+    <div className="min-h-svh bg-white text-black">
+      {/* Page header */}
+      <div className="border-b-2 border-black px-6 py-8 md:px-12 md:py-10">
+        <div className="mx-auto max-w-5xl">
+          <div className="flex items-end justify-between gap-6">
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-black/35 mb-3">
+                Linna / Workspace
+              </p>
+              <h1 className="font-headline text-5xl font-black leading-none tracking-tight text-black md:text-7xl">
+                Projects
+              </h1>
             </div>
-            <DialogFooter>
-              <Button onClick={handleCreateProject} className="w-full">
-                {editingProjectId ? 'Save Changes' : 'Create Project'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+
+            <div className="flex items-end gap-8">
+              <div className="hidden text-right md:block">
+                <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-black/30">
+                  Total
+                </p>
+                <p className="font-mono text-7xl font-black leading-none text-black/8 select-none">
+                  {String(projects.length).padStart(2, '0')}
+                </p>
+              </div>
+
+              <Dialog
+                open={isModalOpen}
+                onOpenChange={(open) => {
+                  setIsModalOpen(open);
+                  if (!open) resetProjectForm();
+                }}
+              >
+                <DialogTrigger asChild>
+                  <Button className="h-12 rounded-none border-2 border-black bg-black px-6 font-mono text-sm text-white hover:bg-white hover:text-black transition-colors duration-150">
+                    <Plus className="mr-2 h-4 w-4" />
+                    New project
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-lg rounded-none border-2 border-black bg-white shadow-[4px_4px_0px_#000]">
+                  <DialogHeader>
+                    <DialogTitle className="font-mono text-base font-bold uppercase tracking-[0.2em]">
+                      {editingProjectId ? '— Edit Project' : '— New Project'}
+                    </DialogTitle>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="name" className="font-mono text-xs uppercase tracking-[0.2em] text-black/60">
+                        Project Name
+                      </Label>
+                      <Input
+                        id="name"
+                        placeholder="e.g. Linna, My SaaS App"
+                        value={newProject.name}
+                        onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
+                        className="rounded-none border-2 border-black bg-white font-mono text-sm focus-visible:ring-0 focus-visible:border-black"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="description" className="font-mono text-xs uppercase tracking-[0.2em] text-black/60">
+                        Description
+                      </Label>
+                      <Input
+                        id="description"
+                        placeholder="One line — what are you building?"
+                        value={newProject.description}
+                        onChange={(e) => setNewProject({ ...newProject, description: e.target.value })}
+                        className="rounded-none border-2 border-black bg-white font-mono text-sm focus-visible:ring-0 focus-visible:border-black"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="tech" className="font-mono text-xs uppercase tracking-[0.2em] text-black/60">
+                        Tech Stack
+                      </Label>
+                      <div
+                        className="flex min-h-10 w-full cursor-text flex-wrap items-center gap-1.5 border-2 border-black bg-white px-2 py-1.5 text-sm focus-within:outline-none"
+                        onClick={() => document.getElementById('tech')?.focus()}
+                      >
+                        {techTags.map((tag, index) => (
+                          <span
+                            key={index}
+                            className="inline-flex shrink-0 items-center gap-1 border border-black/30 bg-black/5 px-2 py-0.5 font-mono text-[11px] text-black select-none"
+                          >
+                            {tag}
+                            <button
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                setTechTags((prev) => prev.filter((_, i) => i !== index));
+                              }}
+                              className="flex h-3.5 w-3.5 items-center justify-center text-[10px] leading-none text-black/40 hover:text-black transition-colors"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                        <input
+                          id="tech"
+                          type="text"
+                          autoComplete="off"
+                          placeholder={techTags.length === 0 ? 'e.g. Next.js, Supabase' : ''}
+                          value={techInput}
+                          onChange={(e) => setTechInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === ' ' && techInput.trim()) {
+                              e.preventDefault();
+                              setTechTags((prev) => [...prev, techInput.trim()]);
+                              setTechInput('');
+                            } else if (e.key === 'Backspace' && techInput === '' && techTags.length > 0) {
+                              setTechTags((prev) => prev.slice(0, -1));
+                            } else if (e.key === 'Enter') {
+                              e.preventDefault();
+                              if (techInput.trim()) {
+                                setTechTags((prev) => [...prev, techInput.trim()]);
+                                setTechInput('');
+                              }
+                            }
+                          }}
+                          className="min-w-[120px] flex-1 border-0 bg-transparent py-0.5 font-mono text-sm focus:outline-none focus:ring-0 placeholder:text-black/30"
+                        />
+                      </div>
+                      <p className="font-mono text-[10px] text-black/35 uppercase tracking-[0.2em]">
+                        Space or Enter to add · Backspace to remove
+                      </p>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="goals" className="font-mono text-xs uppercase tracking-[0.2em] text-black/60">
+                        Current Goals
+                      </Label>
+                      <Textarea
+                        id="goals"
+                        placeholder="What are you trying to accomplish this week?"
+                        value={newProject.goals}
+                        onChange={(e) => setNewProject({ ...newProject, goals: e.target.value })}
+                        className="rounded-none border-2 border-black bg-white font-mono text-sm focus-visible:ring-0 focus-visible:border-black"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="blockers" className="font-mono text-xs uppercase tracking-[0.2em] text-black/60">
+                        Known Blockers
+                      </Label>
+                      <Textarea
+                        id="blockers"
+                        placeholder="What's slowing you down right now?"
+                        value={newProject.blockers}
+                        onChange={(e) => setNewProject({ ...newProject, blockers: e.target.value })}
+                        className="rounded-none border-2 border-black bg-white font-mono text-sm focus-visible:ring-0 focus-visible:border-black"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="target" className="font-mono text-xs uppercase tracking-[0.2em] text-black/60">
+                        Target User
+                      </Label>
+                      <Input
+                        id="target"
+                        placeholder="e.g. indie hackers, students"
+                        value={newProject.targetUser}
+                        onChange={(e) => setNewProject({ ...newProject, targetUser: e.target.value })}
+                        className="rounded-none border-2 border-black bg-white font-mono text-sm focus-visible:ring-0 focus-visible:border-black"
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      onClick={handleCreateProject}
+                      className="w-full rounded-none border-2 border-black bg-black font-mono text-sm uppercase tracking-[0.2em] text-white hover:bg-white hover:text-black transition-colors duration-150"
+                    >
+                      {editingProjectId ? 'Save Changes' : 'Create Project'}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {projects.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-32 bg-white rounded-3xl border border-dashed border-border text-center px-4">
-          <div className="w-16 h-16 rounded-3xl bg-surface flex items-center justify-center mb-6">
-            <LinnaMark className="w-8 h-8 text-primary" />
+      {/* Column headers */}
+      <div className="border-b border-black/15 px-6 md:px-12">
+        <div className="mx-auto max-w-5xl">
+          <div className="grid grid-cols-[2rem_1fr_auto] gap-6 py-3 md:grid-cols-[2rem_1fr_12rem_auto]">
+            <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-black/30">#</span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-black/30">Project</span>
+            <span className="hidden font-mono text-[10px] uppercase tracking-[0.3em] text-black/30 md:block">
+              Activity
+            </span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-black/30">—</span>
           </div>
-          <h2 className="text-xl font-bold mb-2">No projects yet.</h2>
-          <p className="text-body text-sm mb-8 max-w-sm">Create your first project and give Linna the context it needs to start assisting you.</p>
-          <Button onClick={() => setIsModalOpen(true)} className="rounded-full px-8">
-            Create your first project
-          </Button>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {projects.map((project) => (
-            <Card key={project.id} className="group hover:border-primary transition-all duration-300 relative overflow-hidden bg-white border">
-              <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
-                <Link href={`/project/${project.id}`} className="flex-1">
-                  <CardTitle className="text-lg font-bold group-hover:text-primary transition-colors">{project.name}</CardTitle>
-                </Link>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
-                      <MoreVertical className="w-4 h-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => handleEdit(project)}>
-                      <Edit2 className="w-4 h-4 mr-2" /> Edit Context
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <Archive className="w-4 h-4 mr-2" /> Archive
-                    </DropdownMenuItem>
-                    <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDelete(project.id)}>
-                      <Trash2 className="w-4 h-4 mr-2" /> Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </CardHeader>
-              <Link href={`/project/${project.id}`}>
-                <CardContent className="pb-4">
-                  <p className="text-xs text-body line-clamp-2 mb-4 h-8">{project.description}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {project.techStack.split(',').filter(Boolean).map((tag, i) => (
-                      <Badge key={i} variant="secondary" className="bg-surface text-[10px] py-0 px-2 font-medium">
-                        {tag.trim()}
-                      </Badge>
-                    ))}
-                  </div>
-                </CardContent>
-                <CardFooter className="pt-4 border-t border-border/50 flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <Clock className="w-3.5 h-3.5" />
-                    <span className="text-[10px]">
-                      Active {formatDistanceToNow(new Date(project.lastActive))} ago
+      </div>
+
+      {/* Project rows */}
+      <div className="px-6 md:px-12">
+        <div className="mx-auto max-w-5xl">
+          {featuredProjects.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-32 text-center">
+              <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-black/25 mb-6">
+                — Empty —
+              </p>
+              <h2 className="font-headline text-4xl font-black text-black/10 md:text-6xl">
+                No projects yet
+              </h2>
+              <p className="mt-6 max-w-sm font-mono text-sm leading-6 text-black/40">
+                Create your first project to get a persistent conversation with goals, blockers, and stack context.
+              </p>
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="mt-8 border-2 border-black px-6 py-3 font-mono text-sm uppercase tracking-[0.2em] text-black hover:bg-black hover:text-white transition-colors duration-150"
+              >
+                + New project
+              </button>
+            </div>
+          ) : (
+            featuredProjects.map((project, index) => {
+              const tags = project.techStack.split(',').map((t) => t.trim()).filter(Boolean).slice(0, 4);
+
+              return (
+                <div
+                  key={project.id}
+                  className="group border-b border-black/10 transition-colors duration-100 hover:bg-black"
+                >
+                  <div className="grid grid-cols-[2rem_1fr_auto] gap-6 py-5 pl-0 transition-all duration-150 group-hover:pl-4 md:grid-cols-[2rem_1fr_12rem_auto]">
+                    {/* Index */}
+                    <span className="font-mono text-sm text-black/25 group-hover:text-white/30 pt-0.5">
+                      {String(index + 1).padStart(2, '0')}
                     </span>
+
+                    {/* Main content */}
+                    <div className="min-w-0">
+                      <div className="flex items-start gap-3">
+                        <h3 className="font-headline text-xl font-bold text-black group-hover:text-white leading-tight">
+                          {project.name}
+                        </h3>
+                      </div>
+                      {project.description ? (
+                        <p className="mt-1 line-clamp-1 font-mono text-xs text-black/45 group-hover:text-white/50">
+                          {project.description}
+                        </p>
+                      ) : null}
+                      {tags.length > 0 ? (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {tags.map((tag) => (
+                            <span
+                              key={tag}
+                              className="border border-black/20 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.15em] text-black/50 group-hover:border-white/20 group-hover:text-white/50"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+
+                    {/* Activity (desktop) */}
+                    <div className="hidden flex-col justify-center gap-1.5 md:flex">
+                      <div className="flex items-center gap-2 font-mono text-xs text-black/35 group-hover:text-white/40">
+                        <MessageSquare className="h-3 w-3 shrink-0" />
+                        <span>{project.messageCount} messages</span>
+                      </div>
+                      <div className="flex items-center gap-2 font-mono text-xs text-black/35 group-hover:text-white/40">
+                        <Clock className="h-3 w-3 shrink-0" />
+                        <span>{formatDistanceToNow(new Date(project.lastActive))} ago</span>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-1">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 rounded-none text-black/30 hover:bg-transparent hover:text-black group-hover:text-white/40 group-hover:hover:text-white"
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          align="end"
+                          className="rounded-none border-2 border-black bg-white shadow-[2px_2px_0px_#000] font-mono text-xs"
+                        >
+                          <DropdownMenuItem
+                            onClick={() => handleEdit(project)}
+                            className="rounded-none font-mono text-xs uppercase tracking-[0.15em] focus:bg-black focus:text-white"
+                          >
+                            <Edit2 className="mr-2 h-3 w-3" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleDelete(project.id)}
+                            className="rounded-none font-mono text-xs uppercase tracking-[0.15em] text-black/60 focus:bg-black focus:text-white"
+                          >
+                            <Trash2 className="mr-2 h-3 w-3" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+
+                      <Button
+                        asChild
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 rounded-none text-black/40 hover:bg-transparent hover:text-black group-hover:text-white/50 group-hover:hover:text-white"
+                      >
+                        <Link href={`/project/${project.id}`}>
+                          <ArrowUpRight className="h-4 w-4" />
+                        </Link>
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <MessageSquare className="w-3.5 h-3.5" />
-                    <span className="text-[10px] font-medium">{project.messageCount} messages</span>
-                  </div>
-                </CardFooter>
-              </Link>
-            </Card>
-          ))}
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {/* Footer bar */}
+      {featuredProjects.length > 0 && (
+        <div className="border-t-2 border-black px-6 py-4 md:px-12 mt-8">
+          <div className="mx-auto max-w-5xl flex items-center justify-between">
+            <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-black/30">
+              Showing {featuredProjects.length} of {projects.length} projects
+            </p>
+            <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-black/20">
+              Linna — Project Workspace
+            </p>
+          </div>
         </div>
       )}
     </div>
