@@ -92,6 +92,17 @@
   @apply mr-auto border-2 border-foreground bg-background px-5 py-4 text-foreground shadow-none;
 }
 
+/* ── AI message markdown renderer ───────────────────────────── */
+.prose-ai {
+  @apply text-foreground;
+}
+.prose-ai > *:first-child {
+  margin-top: 0 !important;
+}
+.prose-ai > *:last-child {
+  margin-bottom: 0 !important;
+}
+
 /* ── Paper design system ─────────────────────────────────────── */
 
 /* Hard offset shadows — the core paper effect */

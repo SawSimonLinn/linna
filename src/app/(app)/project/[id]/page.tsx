@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { format, formatDistanceToNow } from 'date-fns';
 import ReactMarkdown from 'react-markdown';
+import rehypeHighlight from 'rehype-highlight';
+import 'highlight.js/styles/github.css';
 import {
   AlertCircle,
   ChevronLeft,
@@ -20,6 +22,7 @@ import { contextAwareChat } from '@/ai/flows/context-aware-chat-flow';
 import type { Message, NewProjectInput, Project } from '@/lib/projects/types';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Accordion,
   AccordionContent,
@@ -248,8 +251,102 @@ export default function ProjectChatPage() {
     }
 
     return (
-      <div className="px-6 py-8 font-mono text-xs uppercase tracking-[0.3em] text-black/30">
-        Loading...
+      <div className="min-h-svh bg-white">
+        <div className="mx-auto grid w-full max-w-[1600px] xl:grid-cols-[minmax(0,1fr)_300px]">
+          <section className="flex min-h-svh flex-col border-r-2 border-black">
+            {/* Header skeleton */}
+            <header className="border-b-2 border-black px-6 py-5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-2">
+                  <Skeleton className="h-3 w-16 rounded-none" />
+                  <div className="flex items-center gap-4">
+                    <Skeleton className="h-8 w-48 rounded-none" />
+                    <Skeleton className="h-5 w-14 rounded-none" />
+                  </div>
+                  <Skeleton className="h-3 w-64 rounded-none" />
+                </div>
+                <div className="flex gap-2">
+                  <Skeleton className="h-9 w-24 rounded-none" />
+                  <Skeleton className="h-9 w-24 rounded-none" />
+                </div>
+              </div>
+            </header>
+
+            {/* Message skeletons */}
+            <div className="flex-1 px-6 py-8">
+              <div className="mx-auto w-full max-w-3xl space-y-8">
+                {/* AI message */}
+                <div className="flex justify-start gap-3">
+                  <div className="w-[65%] space-y-2">
+                    <Skeleton className="h-3 w-10 rounded-none" />
+                    <div className="border-2 border-black/10 p-5 space-y-2">
+                      <Skeleton className="h-3 w-full rounded-none" />
+                      <Skeleton className="h-3 w-full rounded-none" />
+                      <Skeleton className="h-3 w-4/5 rounded-none" />
+                    </div>
+                  </div>
+                </div>
+                {/* User message */}
+                <div className="flex justify-end gap-3">
+                  <div className="w-[42%] space-y-2">
+                    <div className="flex justify-end">
+                      <Skeleton className="h-3 w-8 rounded-none" />
+                    </div>
+                    <div className="bg-black/5 p-5 space-y-2">
+                      <Skeleton className="h-3 w-full rounded-none" />
+                      <Skeleton className="h-3 w-3/4 rounded-none" />
+                    </div>
+                  </div>
+                </div>
+                {/* AI message */}
+                <div className="flex justify-start gap-3">
+                  <div className="w-[72%] space-y-2">
+                    <Skeleton className="h-3 w-10 rounded-none" />
+                    <div className="border-2 border-black/10 p-5 space-y-2">
+                      <Skeleton className="h-3 w-full rounded-none" />
+                      <Skeleton className="h-3 w-full rounded-none" />
+                      <Skeleton className="h-3 w-full rounded-none" />
+                      <Skeleton className="h-3 w-2/3 rounded-none" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Input skeleton */}
+            <div className="border-t-2 border-black px-6 py-4">
+              <div className="mx-auto w-full max-w-3xl">
+                <Skeleton className="h-[52px] w-full rounded-none" />
+              </div>
+            </div>
+          </section>
+
+          {/* Sidebar skeleton */}
+          <aside className="hidden xl:flex xl:flex-col">
+            <div className="border-b-2 border-black px-5 py-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-3 w-16 rounded-none" />
+                <Skeleton className="h-7 w-7 rounded-none" />
+              </div>
+              <div className="flex gap-1.5">
+                <Skeleton className="h-5 w-16 rounded-none" />
+                <Skeleton className="h-5 w-20 rounded-none" />
+                <Skeleton className="h-5 w-14 rounded-none" />
+              </div>
+              <div className="space-y-3 pt-2">
+                <Skeleton className="h-10 w-full rounded-none" />
+                <Skeleton className="h-10 w-full rounded-none" />
+                <Skeleton className="h-10 w-full rounded-none" />
+              </div>
+            </div>
+            <div className="px-5 py-5 space-y-3">
+              <Skeleton className="h-3 w-14 rounded-none" />
+              <Skeleton className="h-20 w-full rounded-none" />
+              <Skeleton className="h-14 w-full rounded-none" />
+              <Skeleton className="h-14 w-full rounded-none" />
+            </div>
+          </aside>
+        </div>
       </div>
     );
   }
@@ -319,12 +416,40 @@ export default function ProjectChatPage() {
                 ) : null}
 
                 {isLoadingMessages ? (
-                  <div className="space-y-6 py-8">
-                    {[1, 2, 3].map((i) => (
-                      <div key={i} className={`flex ${i % 2 === 0 ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`h-16 bg-black/5 ${i % 2 === 0 ? 'w-2/5' : 'w-3/5'}`} />
+                  <div className="space-y-8 py-8">
+                    <div className="flex justify-start">
+                      <div className="w-[62%] space-y-2">
+                        <Skeleton className="h-3 w-10 rounded-none" />
+                        <div className="border-2 border-black/10 p-5 space-y-2">
+                          <Skeleton className="h-3 w-full rounded-none" />
+                          <Skeleton className="h-3 w-full rounded-none" />
+                          <Skeleton className="h-3 w-4/5 rounded-none" />
+                        </div>
+                        <Skeleton className="h-3 w-8 rounded-none" />
                       </div>
-                    ))}
+                    </div>
+                    <div className="flex justify-end">
+                      <div className="w-[38%] space-y-2">
+                        <div className="flex justify-end"><Skeleton className="h-3 w-8 rounded-none" /></div>
+                        <div className="bg-black p-5 space-y-2">
+                          <Skeleton className="h-3 w-full rounded-none bg-white/20" />
+                          <Skeleton className="h-3 w-3/4 rounded-none bg-white/20" />
+                        </div>
+                        <div className="flex justify-end"><Skeleton className="h-3 w-8 rounded-none" /></div>
+                      </div>
+                    </div>
+                    <div className="flex justify-start">
+                      <div className="w-[70%] space-y-2">
+                        <Skeleton className="h-3 w-10 rounded-none" />
+                        <div className="border-2 border-black/10 p-5 space-y-2">
+                          <Skeleton className="h-3 w-full rounded-none" />
+                          <Skeleton className="h-3 w-full rounded-none" />
+                          <Skeleton className="h-3 w-full rounded-none" />
+                          <Skeleton className="h-3 w-2/3 rounded-none" />
+                        </div>
+                        <Skeleton className="h-3 w-8 rounded-none" />
+                      </div>
+                    </div>
                   </div>
                 ) : messages.length === 0 ? (
                   <div className="flex flex-1 flex-col items-center justify-center py-24 text-center">
@@ -382,12 +507,50 @@ export default function ProjectChatPage() {
 
                           <div className={message.role === 'user' ? 'chat-bubble-user' : 'chat-bubble-ai'}>
                             {message.role === 'assistant' ? (
-                              <div className="prose prose-sm max-w-none text-sm leading-7 prose-headings:font-headline prose-headings:font-black prose-headings:text-black prose-p:my-2 prose-strong:text-black prose-ul:my-2 prose-li:my-1">
+                              <div className="prose-ai">
                                 <ReactMarkdown
+                                  rehypePlugins={[rehypeHighlight]}
                                   components={{
-                                    ul: ({ children }) => <ul className="list-disc pl-5">{children}</ul>,
-                                    ol: ({ children }) => <ol className="list-decimal pl-5">{children}</ol>,
-                                    strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                                    h1: ({ children }) => <h1 className="font-headline text-xl font-black text-black mt-4 mb-2 first:mt-0">{children}</h1>,
+                                    h2: ({ children }) => <h2 className="font-headline text-lg font-black text-black mt-4 mb-2 first:mt-0">{children}</h2>,
+                                    h3: ({ children }) => <h3 className="font-headline text-base font-bold text-black mt-3 mb-1 first:mt-0">{children}</h3>,
+                                    p: ({ children }) => <p className="text-sm leading-7 my-2 first:mt-0 last:mb-0">{children}</p>,
+                                    ul: ({ children }) => <ul className="my-2 space-y-1 list-disc pl-5 text-sm leading-7">{children}</ul>,
+                                    ol: ({ children }) => <ol className="my-2 space-y-1 list-decimal pl-5 text-sm leading-7">{children}</ol>,
+                                    li: ({ children }) => <li className="text-sm leading-7">{children}</li>,
+                                    strong: ({ children }) => <strong className="font-semibold text-black">{children}</strong>,
+                                    em: ({ children }) => <em className="italic">{children}</em>,
+                                    blockquote: ({ children }) => (
+                                      <blockquote className="my-3 border-l-4 border-black/20 pl-4 font-mono text-xs text-black/50 italic">
+                                        {children}
+                                      </blockquote>
+                                    ),
+                                    a: ({ href, children }) => (
+                                      <a href={href} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 decoration-black/30 hover:decoration-black transition-colors">
+                                        {children}
+                                      </a>
+                                    ),
+                                    hr: () => <hr className="my-4 border-black/15" />,
+                                    code: ({ className, children, ...props }) => {
+                                      const isBlock = className?.includes('language-');
+                                      if (isBlock) {
+                                        return (
+                                          <code className={`${className ?? ''} block text-[12.5px] leading-6`} {...props}>
+                                            {children}
+                                          </code>
+                                        );
+                                      }
+                                      return (
+                                        <code className="rounded-sm bg-black/8 px-1.5 py-0.5 font-mono text-[12px] text-black" {...props}>
+                                          {children}
+                                        </code>
+                                      );
+                                    },
+                                    pre: ({ children }) => (
+                                      <pre className="my-3 overflow-x-auto border-2 border-black/10 bg-[#f6f8fa] p-4 font-mono text-[12.5px] leading-6 first:mt-0 last:mb-0">
+                                        {children}
+                                      </pre>
+                                    ),
                                   }}
                                 >
                                   {message.content}
