@@ -2,8 +2,7 @@
 
 import { useUser, SignOutButton } from '@clerk/nextjs';
 import { useEffect, useState } from 'react';
-import { useTheme } from 'next-themes';
-import { ExternalLink, LogOut, Monitor, Moon, Shield, Sliders, Sun, User } from 'lucide-react';
+import { ExternalLink, LogOut, Shield, Sliders, User } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -73,15 +72,8 @@ function PrefRow({ label, description, checked, onCheckedChange }: PrefRowProps)
   );
 }
 
-const THEME_OPTIONS = [
-  { value: 'light', label: 'Light', icon: Sun },
-  { value: 'system', label: 'System', icon: Monitor },
-  { value: 'dark', label: 'Dark', icon: Moon },
-] as const;
-
 export default function SettingsPage() {
   const { user } = useUser();
-  const { theme, setTheme } = useTheme();
   const [prefs, setPrefs] = useState<Preferences>(DEFAULT_PREFS);
   const [mounted, setMounted] = useState(false);
 
@@ -151,36 +143,6 @@ export default function SettingsPage() {
                 <ExternalLink className="ml-2 h-3 w-3" />
               </a>
             </Button>
-          </div>
-        </Section>
-
-        {/* Appearance */}
-        <Section title="Appearance" icon={<Sun className="h-3.5 w-3.5" />}>
-          <div>
-            <Label className="font-mono text-xs font-semibold text-foreground">Theme</Label>
-            <p className="mt-0.5 mb-4 font-mono text-[11px] text-foreground/45 leading-5">
-              Choose how Linna looks. System follows your OS preference.
-            </p>
-            {mounted ? (
-              <div className="flex border-2 border-foreground w-fit">
-                {THEME_OPTIONS.map(({ value, label, icon: Icon }) => (
-                  <button
-                    key={value}
-                    onClick={() => setTheme(value)}
-                    className={`flex items-center gap-2 px-4 py-2.5 font-mono text-xs uppercase tracking-[0.15em] transition-colors ${
-                      theme === value
-                        ? 'bg-foreground text-background'
-                        : 'bg-background text-foreground/50 hover:text-foreground'
-                    }`}
-                  >
-                    <Icon className="h-3.5 w-3.5" />
-                    {label}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="h-10 w-64 border-2 border-foreground/20 bg-foreground/5 animate-pulse" />
-            )}
           </div>
         </Section>
 

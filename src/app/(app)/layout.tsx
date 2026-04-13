@@ -118,30 +118,30 @@ function ProjectItem({
               }}
               onBlur={() => void submitRename()}
               disabled={saving}
-              className="h-7 rounded-none border-2 border-foreground font-mono text-xs focus-visible:ring-0 focus-visible:ring-offset-0"
+              className="h-7 rounded-none border-2 border-foreground bg-background/90 font-mono text-xs focus-visible:ring-0 focus-visible:ring-offset-0"
             />
           </div>
         ) : (
           <SidebarMenuButton
             asChild
             isActive={isActive}
-            className="h-auto w-full rounded-none p-0 data-[active=true]:bg-foreground data-[active=true]:text-background"
+            className="h-auto w-full rounded-none p-0 data-[active=true]:bg-background data-[active=true]:text-foreground"
           >
             <Link
               href={`/project/${project.id}`}
               className="grid w-full grid-cols-[14px_minmax(0,1fr)] items-start gap-x-3 gap-y-1 px-2 py-2.5 pr-8"
             >
-              <Bot className="mt-0.5 h-3.5 w-3.5 shrink-0 text-foreground/40 group-data-[active=true]/item:text-background/60" />
+              <Bot className="mt-0.5 h-3.5 w-3.5 shrink-0 text-foreground/40 opacity-60" />
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <p className="truncate font-mono text-xs font-semibold leading-4 text-foreground group-data-[active=true]/item:text-background">
+                  <p className="truncate font-mono text-xs font-semibold leading-4 text-foreground">
                     {project.name}
                   </p>
                   {isPinned && (
-                    <Pin className="h-2.5 w-2.5 shrink-0 text-foreground/30 group-data-[active=true]/item:text-background/40" />
+                    <Pin className="h-2.5 w-2.5 shrink-0 text-foreground/30 opacity-60" />
                   )}
                 </div>
-                <p className="mt-0.5 line-clamp-1 font-mono text-[10px] leading-4 text-foreground/40 group-data-[active=true]/item:text-background/50">
+                <p className="mt-0.5 line-clamp-1 font-mono text-[10px] leading-4 text-foreground/40">
                   {project.description || 'No description'}
                 </p>
               </div>
@@ -309,8 +309,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
       <SidebarProvider defaultOpen={true}>
-        <div className="flex min-h-svh w-full bg-background">
-          <Sidebar className="border-r-2 border-foreground bg-background">
+        <div className="flex min-h-svh w-full bg-paper">
+          <Sidebar className="border-r-2 border-foreground bg-paper">
             <SidebarHeader className="gap-4 border-b-2 border-foreground px-4 py-4">
               <Link href="/dashboard" className="flex items-center gap-3">
                 <div className="flex h-9 w-9 items-center justify-center border-2 border-foreground bg-foreground text-background">
@@ -339,7 +339,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     <SidebarMenuButton
                       asChild
                       isActive={pathname === '/dashboard'}
-                      className="h-10 rounded-none font-mono text-xs uppercase tracking-[0.2em] data-[active=true]:bg-foreground data-[active=true]:text-background"
+                      className="h-10 rounded-none font-mono text-xs uppercase tracking-[0.2em] data-[active=true]:bg-background data-[active=true]:text-foreground"
                     >
                       <Link href="/dashboard">
                         <Compass className="h-3.5 w-3.5" />
@@ -370,7 +370,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarGroupLabel>
                 <SidebarMenu>
                   {projects.length === 0 ? (
-                    <div className="border border-dashed border-foreground/20 px-3 py-4 font-mono text-[11px] text-foreground/35">
+                    <div className="rounded-none border border-dashed border-foreground/20 bg-background/40 px-3 py-4 font-mono text-[11px] text-foreground/35">
                       No projects yet.
                     </div>
                   ) : unpinnedProjects.length === 0 ? (
@@ -384,7 +384,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
             <SidebarFooter className="gap-3 border-t-2 border-foreground px-4 py-4">
               {activeProject ? (
-                <div className="border-2 border-foreground p-3">
+                <div className="border-2 border-foreground bg-background/50 p-3">
                   <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-foreground/35 mb-1.5">Active</p>
                   <p className="truncate font-mono text-xs font-bold text-foreground">{activeProject.name}</p>
                   <p className="mt-0.5 line-clamp-1 font-mono text-[10px] text-foreground/40">
@@ -396,7 +396,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               {/* Profile — single click opens dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="flex w-full items-center gap-3 border-2 border-foreground p-3 text-left transition-colors hover:bg-foreground/5">
+                  <button className="flex w-full items-center gap-3 border-2 border-foreground bg-background/40 p-3 text-left transition-colors hover:bg-background/70">
                     <Avatar className="h-8 w-8 shrink-0 rounded-none border-2 border-foreground">
                       <AvatarImage src={user?.imageUrl} />
                       <AvatarFallback className="rounded-none bg-foreground font-mono text-xs text-background">

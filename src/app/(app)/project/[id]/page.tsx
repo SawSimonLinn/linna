@@ -242,7 +242,7 @@ export default function ProjectChatPage() {
     if (loadError) {
       return (
         <div className="flex min-h-svh items-center justify-center px-4 py-8">
-          <div className="flex items-center gap-3 border-2 border-black bg-white px-6 py-4 text-black">
+          <div className="flex items-center gap-3 border-2 border-black bg-background px-6 py-4 text-black">
             <AlertCircle className="h-5 w-5 shrink-0" />
             <p className="font-mono text-sm">{loadError}</p>
           </div>
@@ -251,11 +251,11 @@ export default function ProjectChatPage() {
     }
 
     return (
-      <div className="min-h-svh bg-white">
+      <div className="min-h-svh bg-paper">
         <div className="mx-auto grid w-full max-w-[1600px] xl:grid-cols-[minmax(0,1fr)_300px]">
           <section className="flex min-h-svh flex-col border-r-2 border-black">
             {/* Header skeleton */}
-            <header className="border-b-2 border-black px-6 py-5">
+            <header className="border-b-2 border-black bg-background px-6 py-5">
               <div className="flex items-start justify-between gap-4">
                 <div className="space-y-2">
                   <Skeleton className="h-3 w-16 rounded-none" />
@@ -279,7 +279,7 @@ export default function ProjectChatPage() {
                 <div className="flex justify-start gap-3">
                   <div className="w-[65%] space-y-2">
                     <Skeleton className="h-3 w-10 rounded-none" />
-                    <div className="border-2 border-black/10 p-5 space-y-2">
+                    <div className="border-2 border-black/10 bg-background p-5 space-y-2">
                       <Skeleton className="h-3 w-full rounded-none" />
                       <Skeleton className="h-3 w-full rounded-none" />
                       <Skeleton className="h-3 w-4/5 rounded-none" />
@@ -302,7 +302,7 @@ export default function ProjectChatPage() {
                 <div className="flex justify-start gap-3">
                   <div className="w-[72%] space-y-2">
                     <Skeleton className="h-3 w-10 rounded-none" />
-                    <div className="border-2 border-black/10 p-5 space-y-2">
+                    <div className="border-2 border-black/10 bg-background p-5 space-y-2">
                       <Skeleton className="h-3 w-full rounded-none" />
                       <Skeleton className="h-3 w-full rounded-none" />
                       <Skeleton className="h-3 w-full rounded-none" />
@@ -322,7 +322,7 @@ export default function ProjectChatPage() {
           </section>
 
           {/* Sidebar skeleton */}
-          <aside className="hidden xl:flex xl:flex-col">
+          <aside className="hidden border-l-2 border-black xl:flex xl:flex-col">
             <div className="border-b-2 border-black px-5 py-5 space-y-4">
               <div className="flex items-center justify-between">
                 <Skeleton className="h-3 w-16 rounded-none" />
@@ -353,13 +353,13 @@ export default function ProjectChatPage() {
 
   return (
     <>
-      <div className="min-h-svh bg-white">
+      <div className="min-h-svh bg-paper">
         <div className="mx-auto grid w-full max-w-[1600px] xl:grid-cols-[minmax(0,1fr)_300px]">
 
           {/* Chat column */}
           <section className="flex min-h-svh flex-col border-r-2 border-black">
             {/* Header */}
-            <header className="border-b-2 border-black px-6 py-5">
+            <header className="border-b-2 border-black bg-background px-6 py-5">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="space-y-2">
                   <Link
@@ -378,7 +378,7 @@ export default function ProjectChatPage() {
                     </span>
                   </div>
                   {project.description ? (
-                    <p className="font-mono text-xs text-black/45">
+                    <p className="font-mono text-xs text-black/55">
                       {project.description}
                     </p>
                   ) : null}
@@ -388,7 +388,7 @@ export default function ProjectChatPage() {
                   <Button
                     variant="outline"
                     onClick={() => setIsSessionHistoryOpen(true)}
-                    className="h-9 rounded-none border-2 border-black bg-white font-mono text-xs uppercase tracking-[0.15em] text-black hover:bg-black hover:text-white transition-colors"
+                    className="h-9 rounded-none border-2 border-black bg-background font-mono text-xs uppercase tracking-[0.15em] text-black hover:bg-black hover:text-white transition-colors"
                   >
                     <History className="mr-2 h-3.5 w-3.5" />
                     History
@@ -396,7 +396,7 @@ export default function ProjectChatPage() {
                   <Button
                     variant="outline"
                     onClick={() => setIsSettingsOpen(true)}
-                    className="h-9 rounded-none border-2 border-black bg-white font-mono text-xs uppercase tracking-[0.15em] text-black hover:bg-black hover:text-white transition-colors"
+                    className="h-9 rounded-none border-2 border-black bg-background font-mono text-xs uppercase tracking-[0.15em] text-black hover:bg-black hover:text-white transition-colors"
                   >
                     <Settings className="mr-2 h-3.5 w-3.5" />
                     Settings
@@ -409,7 +409,7 @@ export default function ProjectChatPage() {
             <ScrollArea className="flex-1">
               <div className="mx-auto flex w-full max-w-3xl flex-col px-6 pb-12 pt-8">
                 {loadError ? (
-                  <div className="mb-4 flex items-center gap-2 border-2 border-black px-4 py-3 font-mono text-sm text-black">
+                  <div className="mb-4 flex items-center gap-2 border-2 border-black bg-background px-4 py-3 font-mono text-sm text-black">
                     <AlertCircle className="h-4 w-4 shrink-0" />
                     <span>{loadError}</span>
                   </div>
@@ -420,7 +420,7 @@ export default function ProjectChatPage() {
                     <div className="flex justify-start">
                       <div className="w-[62%] space-y-2">
                         <Skeleton className="h-3 w-10 rounded-none" />
-                        <div className="border-2 border-black/10 p-5 space-y-2">
+                        <div className="border-2 border-black/10 bg-background p-5 space-y-2">
                           <Skeleton className="h-3 w-full rounded-none" />
                           <Skeleton className="h-3 w-full rounded-none" />
                           <Skeleton className="h-3 w-4/5 rounded-none" />
@@ -441,7 +441,7 @@ export default function ProjectChatPage() {
                     <div className="flex justify-start">
                       <div className="w-[70%] space-y-2">
                         <Skeleton className="h-3 w-10 rounded-none" />
-                        <div className="border-2 border-black/10 p-5 space-y-2">
+                        <div className="border-2 border-black/10 bg-background p-5 space-y-2">
                           <Skeleton className="h-3 w-full rounded-none" />
                           <Skeleton className="h-3 w-full rounded-none" />
                           <Skeleton className="h-3 w-full rounded-none" />
@@ -453,7 +453,7 @@ export default function ProjectChatPage() {
                   </div>
                 ) : messages.length === 0 ? (
                   <div className="flex flex-1 flex-col items-center justify-center py-24 text-center">
-                    <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-black/20 mb-6">
+                    <p className="mb-6 font-mono text-[10px] uppercase tracking-[0.4em] text-black/20">
                       — Start —
                     </p>
                     <h2 className="font-headline text-4xl font-black text-black">
@@ -462,7 +462,7 @@ export default function ProjectChatPage() {
                     <h2 className="font-headline text-4xl font-black text-black/20">
                       {project.name}
                     </h2>
-                    <p className="mt-4 max-w-md font-mono text-xs leading-6 text-black/40">
+                    <p className="mt-4 max-w-md font-mono text-xs leading-6 text-black/50">
                       This thread knows your stack, goals, blockers, and target user.
                     </p>
                     <div className="mt-8 flex flex-wrap justify-center gap-3">
@@ -585,9 +585,9 @@ export default function ProjectChatPage() {
             </ScrollArea>
 
             {/* Input bar */}
-            <div className="border-t-2 border-black bg-white px-6 py-4">
+            <div className="border-t-2 border-black bg-paper px-6 py-4">
               <div className="mx-auto w-full max-w-3xl">
-                <div className="flex items-end gap-0 border-2 border-black bg-white">
+                <div className="flex items-end gap-0 border-2 border-black bg-background">
                   <textarea
                     rows={1}
                     placeholder="Message Linna about this project..."
@@ -599,12 +599,12 @@ export default function ProjectChatPage() {
                         void handleSend();
                       }
                     }}
-                    className="min-h-[52px] flex-1 resize-none border-0 bg-transparent px-4 py-3.5 font-mono text-sm leading-6 placeholder:text-black/25 focus:outline-none focus:ring-0"
+                    className="min-h-[52px] flex-1 resize-none border-0 bg-transparent px-4 py-3.5 font-mono text-sm leading-6 placeholder:text-black/30 focus:outline-none focus:ring-0"
                   />
                   <Button
                     onClick={() => void handleSend()}
                     disabled={!input.trim() || isLoading}
-                    className="h-[52px] w-[52px] rounded-none border-0 border-l-2 border-black bg-black p-0 text-white hover:bg-white hover:text-black disabled:opacity-30 transition-colors"
+                    className="h-[52px] w-[52px] rounded-none border-0 border-l-2 border-black bg-black p-0 text-white hover:bg-background hover:text-black disabled:opacity-30 transition-colors"
                   >
                     <Send className="h-4 w-4" />
                   </Button>
@@ -617,7 +617,7 @@ export default function ProjectChatPage() {
           </section>
 
           {/* Context sidebar */}
-          <aside className="hidden xl:flex xl:min-h-svh xl:flex-col">
+          <aside className="hidden border-l-2 border-black xl:flex xl:min-h-svh xl:flex-col">
             <div className="border-b-2 border-black px-5 py-5">
               <div className="flex items-center justify-between mb-4">
                 <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-black/35">Context</p>
@@ -703,7 +703,7 @@ export default function ProjectChatPage() {
 
       {/* History sheet */}
       <Sheet open={isSessionHistoryOpen} onOpenChange={setIsSessionHistoryOpen}>
-        <SheetContent side="right" className="flex w-96 flex-col rounded-none border-l-2 border-black bg-white shadow-none">
+        <SheetContent side="right" className="flex w-96 flex-col rounded-none border-l-2 border-black bg-paper shadow-none">
           <SheetHeader className="shrink-0 border-b-2 border-black pb-4">
             <SheetTitle className="font-mono text-xs uppercase tracking-[0.3em] text-black">
               Session History
@@ -729,7 +729,7 @@ export default function ProjectChatPage() {
                           className={`border px-3 py-2 text-xs leading-relaxed ${
                             message.role === 'user'
                               ? 'ml-4 border-black bg-black text-white'
-                              : 'mr-4 border-black/20 bg-white text-black'
+                              : 'mr-4 border-black/20 bg-background text-black'
                           }`}
                         >
                           <span className="mb-0.5 block font-mono text-[9px] uppercase tracking-[0.3em] opacity-50">
@@ -752,7 +752,7 @@ export default function ProjectChatPage() {
 
       {/* Settings sheet */}
       <Sheet open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
-        <SheetContent side="right" className="flex w-96 flex-col rounded-none border-l-2 border-black bg-white shadow-none">
+        <SheetContent side="right" className="flex w-96 flex-col rounded-none border-l-2 border-black bg-paper shadow-none">
           <SheetHeader className="shrink-0 border-b-2 border-black pb-4">
             <SheetTitle className="font-mono text-xs uppercase tracking-[0.3em] text-black">
               Project Settings
@@ -786,7 +786,7 @@ export default function ProjectChatPage() {
                 </div>
                 <Button
                   variant="outline"
-                  className="w-full rounded-none border-2 border-black bg-white font-mono text-xs uppercase tracking-[0.15em] text-black hover:bg-black hover:text-white transition-colors"
+                  className="w-full rounded-none border-2 border-black bg-background font-mono text-xs uppercase tracking-[0.15em] text-black hover:bg-black hover:text-white transition-colors"
                   onClick={() => {
                     setIsSettingsOpen(false);
                     openEdit();
@@ -801,7 +801,7 @@ export default function ProjectChatPage() {
                 <p className="font-mono text-[9px] uppercase tracking-[0.4em] text-black/30">Danger Zone</p>
                 <Button
                   variant="outline"
-                  className="w-full rounded-none border-2 border-black bg-white font-mono text-xs uppercase tracking-[0.15em] text-black hover:bg-black hover:text-white transition-colors"
+                  className="w-full rounded-none border-2 border-black bg-background font-mono text-xs uppercase tracking-[0.15em] text-black hover:bg-black hover:text-white transition-colors"
                   onClick={handleDeleteProject}
                 >
                   <Trash2 className="mr-2 h-3.5 w-3.5" />
@@ -824,7 +824,7 @@ export default function ProjectChatPage() {
           }
         }}
       >
-        <DialogContent className="max-w-lg rounded-none border-2 border-black bg-white shadow-[4px_4px_0px_#000]">
+        <DialogContent className="max-w-lg rounded-none border-2 border-black bg-paper shadow-[4px_4px_0px_#000]">
           <DialogHeader>
             <DialogTitle className="font-mono text-xs uppercase tracking-[0.3em] text-black">
               — Edit Project
@@ -858,7 +858,7 @@ export default function ProjectChatPage() {
                 Tech Stack
               </Label>
               <div
-                className="flex min-h-10 w-full cursor-text flex-wrap items-center gap-1.5 border-2 border-black bg-white px-2 py-1.5"
+                className="flex min-h-10 w-full cursor-text flex-wrap items-center gap-1.5 border-2 border-black bg-background px-2 py-1.5"
                 onClick={() => document.getElementById('edit-tech')?.focus()}
               >
                 {editTechTags.map((tag, index) => (
@@ -942,7 +942,7 @@ export default function ProjectChatPage() {
           <DialogFooter>
             <Button
               onClick={handleSaveEdit}
-              className="w-full rounded-none border-2 border-black bg-black font-mono text-xs uppercase tracking-[0.2em] text-white hover:bg-white hover:text-black transition-colors"
+              className="w-full rounded-none border-2 border-black bg-black font-mono text-xs uppercase tracking-[0.2em] text-white hover:bg-background hover:text-black transition-colors"
             >
               Save Changes
             </Button>
