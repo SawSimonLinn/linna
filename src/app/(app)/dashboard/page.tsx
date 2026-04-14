@@ -14,6 +14,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import type { NewProjectInput, Project } from '@/lib/projects/types';
+import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -390,7 +391,7 @@ export default function Dashboard() {
 
                       {/* Tags */}
                       {tags.length > 0 ? (
-                        <div className="flex flex-wrap gap-1.5 px-5 pt-3">
+                        <div className="flex flex-wrap gap-1.5 px-5 pt-3 pb-1">
                           {tags.map((tag) => (
                             <span
                               key={tag}
@@ -399,6 +400,22 @@ export default function Dashboard() {
                               {tag}
                             </span>
                           ))}
+                        </div>
+                      ) : null}
+
+                      {/* Task progress bar */}
+                      {project.taskCount > 0 ? (
+                        <div className="px-5 pt-3 pb-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-foreground/50 font-bold">Progress</span>
+                            <span className="font-mono text-[9px] font-bold text-foreground/70">
+                              {project.completedTaskCount}/{project.taskCount}
+                            </span>
+                          </div>
+                          <Progress
+                            value={(project.completedTaskCount / project.taskCount) * 100}
+                            className="h-2 rounded-none bg-foreground/15 [&>div]:bg-foreground [&>div]:rounded-none"
+                          />
                         </div>
                       ) : null}
 

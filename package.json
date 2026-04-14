@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@ai-sdk/google": "^3.0.63",
     "@ai-sdk/openai": "^3.0.52",
     "@clerk/nextjs": "^7.0.7",
     "@genkit-ai/google-genai": "^1.16.1",

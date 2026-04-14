@@ -432,7 +432,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </SidebarFooter>
           </Sidebar>
 
-          <div className="flex min-h-svh min-w-0 flex-1 flex-col">
+          <div className="flex h-svh min-w-0 flex-1 flex-col overflow-hidden">
             <div className="flex items-center justify-between border-b-2 border-foreground px-4 py-3 md:hidden">
               <div className="flex items-center gap-3">
                 <SidebarTrigger className="h-9 w-9 rounded-none border-2 border-foreground bg-background" />
@@ -444,7 +444,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 </div>
               </div>
             </div>
-            <main className="flex-1 overflow-auto">{children}</main>
+            <main className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</main>
           </div>
         </div>
       </SidebarProvider>

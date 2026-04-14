@@ -9,6 +9,10 @@ export type Project = {
   lastActive: string;
   messageCount: number;
   createdAt: string;
+  nextAction: string;
+  mvpScope: string;
+  taskCount: number;
+  completedTaskCount: number;
 };
 
 export type Message = {
@@ -16,6 +20,15 @@ export type Message = {
   projectId: string;
   role: 'user' | 'assistant';
   content: string;
+  createdAt: string;
+};
+
+export type Task = {
+  id: string;
+  projectId: string;
+  title: string;
+  completed: boolean;
+  order: number;
   createdAt: string;
 };
 

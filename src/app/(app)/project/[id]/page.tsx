@@ -9,17 +9,27 @@ import rehypeHighlight from 'rehype-highlight';
 import 'highlight.js/styles/github.css';
 import {
   AlertCircle,
+  ArrowRight,
+  Check,
+  CheckCircle2,
   ChevronLeft,
+  Circle,
+  Copy,
   Edit3,
   History,
   MessageSquareText,
+  Plus,
+  RefreshCw,
   Send,
   Settings,
   Sparkles,
   Trash2,
+  X,
 } from 'lucide-react';
 import { contextAwareChat } from '@/ai/flows/context-aware-chat-flow';
-import type { Message, NewProjectInput, Project } from '@/lib/projects/types';
+import { extractNextAction } from '@/ai/flows/extract-next-action-flow';
+import type { Message, NewProjectInput, Project, Task } from '@/lib/projects/types';
+import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -52,6 +62,8 @@ export default function ProjectChatPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
   const [isSessionHistoryOpen, setIsSessionHistoryOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -67,14 +79,20 @@ export default function ProjectChatPage() {
   const [editTechTags, setEditTechTags] = useState<string[]>([]);
   const [editTechInput, setEditTechInput] = useState('');
 
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [taskInput, setTaskInput] = useState('');
+  const [isGeneratingTasks, setIsGeneratingTasks] = useState(false);
+  const [mvpScopeInput, setMvpScopeInput] = useState('');
+
   useEffect(() => {
     const loadProject = async () => {
       setIsLoadingMessages(true);
       setLoadError(null);
       try {
-        const [projectResponse, messagesResponse] = await Promise.all([
+        const [projectResponse, messagesResponse, tasksResponse] = await Promise.all([
           fetch(`/api/projects/${id}`, { cache: 'no-store' }),
           fetch(`/api/projects/${id}/messages`, { cache: 'no-store' }),
+          fetch(`/api/projects/${id}/tasks`, { cache: 'no-store' }),
         ]);
 
         if (!projectResponse.ok) {
@@ -89,13 +107,15 @@ export default function ProjectChatPage() {
           return;
         }
 
-        const [projectData, messagesData] = await Promise.all([
+        const [projectData, messagesData, tasksData] = await Promise.all([
           projectResponse.json() as Promise<Project>,
           messagesResponse.json() as Promise<Message[]>,
+          tasksResponse.ok ? (tasksResponse.json() as Promise<Task[]>) : Promise.resolve([]),
         ]);
 
         setProject(projectData);
         setMessages(messagesData);
+        setTasks(tasksData);
       } catch (error) {
         setLoadError(error instanceof Error ? error.message : 'Failed to load chat');
       } finally {
@@ -213,6 +233,21 @@ export default function ProjectChatPage() {
       setProject((curr) =>
         curr ? { ...curr, lastActive: aiMsg.createdAt, messageCount: curr.messageCount + 2 } : curr,
       );
+
+      // Background: extract next action from conversation and save to project
+      const allMsgs = [...messages, userMsg, aiMsg];
+      extractNextAction({
+        projectName: project.name,
+        recentMessages: allMsgs.map((m) => ({ role: m.role, content: m.content })),
+      }).then((nextAction) => {
+        if (!nextAction) return;
+        void fetch(`/api/projects/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nextAction }),
+        });
+        setProject((curr) => curr ? { ...curr, nextAction } : curr);
+      }).catch(() => { /* non-critical */ });
     } catch (error) {
       console.error('Chat error:', error);
 
@@ -234,8 +269,94 @@ export default function ProjectChatPage() {
     }
   };
 
+  const handleCopy = (messageId: string, content: string) => {
+    void navigator.clipboard.writeText(content).then(() => {
+      setCopiedId(messageId);
+      setTimeout(() => setCopiedId(null), 2000);
+    });
+  };
+
+  const handleDeleteMessage = async (messageId: string) => {
+    const res = await fetch(`/api/projects/${id}/messages/${messageId}`, { method: 'DELETE' });
+    if (res.ok) {
+      setMessages((prev) => prev.filter((m) => m.id !== messageId));
+    }
+  };
+
   const handleQuickChip = (text: string) => {
     void handleSend(text);
+  };
+
+  const handleAddTask = async () => {
+    if (!taskInput.trim()) return;
+    const title = taskInput.trim();
+    setTaskInput('');
+    const res = await fetch(`/api/projects/${id}/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title }),
+    });
+    if (!res.ok) return;
+    const task = (await res.json()) as Task;
+    setTasks((prev) => [...prev, task]);
+    setProject((curr) => curr ? { ...curr, taskCount: curr.taskCount + 1 } : curr);
+  };
+
+  const handleToggleTask = async (task: Task) => {
+    const newCompleted = !task.completed;
+    setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, completed: newCompleted } : t));
+    setProject((curr) => curr ? {
+      ...curr,
+      completedTaskCount: newCompleted ? curr.completedTaskCount + 1 : curr.completedTaskCount - 1,
+    } : curr);
+    const res = await fetch(`/api/projects/${id}/tasks/${task.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ completed: newCompleted }),
+    });
+    if (!res.ok) {
+      setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, completed: task.completed } : t));
+      setProject((curr) => curr ? {
+        ...curr,
+        completedTaskCount: task.completed ? curr.completedTaskCount + 1 : curr.completedTaskCount - 1,
+      } : curr);
+    }
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    if (!confirm('Delete this task?')) return;
+    const task = tasks.find((t) => t.id === taskId);
+    setTasks((prev) => prev.filter((t) => t.id !== taskId));
+    if (task) {
+      setProject((curr) => curr ? {
+        ...curr,
+        taskCount: curr.taskCount - 1,
+        completedTaskCount: task.completed ? curr.completedTaskCount - 1 : curr.completedTaskCount,
+      } : curr);
+    }
+    await fetch(`/api/projects/${id}/tasks/${taskId}`, { method: 'DELETE' });
+  };
+
+  const handleGenerateTasksFromMvp = async () => {
+    if (!mvpScopeInput.trim()) return;
+    setIsGeneratingTasks(true);
+    const res = await fetch(`/api/projects/${id}/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fromMvp: mvpScopeInput }),
+    });
+    setIsGeneratingTasks(false);
+    if (!res.ok) return;
+    const newTasks = (await res.json()) as Task[];
+    setTasks(newTasks);
+    setProject((curr) => curr ? {
+      ...curr,
+      taskCount: newTasks.length,
+      completedTaskCount: newTasks.filter((t) => t.completed).length,
+      mvpScope: mvpScopeInput,
+    } : curr);
+    setMvpScopeInput('');
+    setIsSettingsOpen(false);
   };
 
   if (!project) {
@@ -251,9 +372,9 @@ export default function ProjectChatPage() {
     }
 
     return (
-      <div className="min-h-svh bg-paper">
-        <div className="mx-auto grid w-full max-w-[1600px] xl:grid-cols-[minmax(0,1fr)_300px]">
-          <section className="flex min-h-svh flex-col border-r-2 border-black">
+      <div className="flex h-full flex-col bg-paper">
+        <div className="mx-auto grid h-full w-full max-w-[1600px] flex-1 xl:grid-cols-[minmax(0,1fr)_300px]">
+          <section className="flex min-h-0 flex-col border-r-2 border-black">
             {/* Header skeleton */}
             <header className="border-b-2 border-black bg-background px-6 py-5">
               <div className="flex items-start justify-between gap-4">
@@ -353,11 +474,11 @@ export default function ProjectChatPage() {
 
   return (
     <>
-      <div className="min-h-svh bg-paper">
-        <div className="mx-auto grid w-full max-w-[1600px] xl:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="flex h-full flex-col bg-paper">
+        <div className="mx-auto grid h-full w-full max-w-[1600px] flex-1 xl:grid-cols-[minmax(0,1fr)_300px]">
 
           {/* Chat column */}
-          <section className="flex min-h-svh flex-col border-r-2 border-black">
+          <section className="flex min-h-0 flex-col border-r-2 border-black">
             {/* Header */}
             <header className="border-b-2 border-black bg-background px-6 py-5">
               <div className="flex flex-wrap items-start justify-between gap-4">
@@ -381,6 +502,13 @@ export default function ProjectChatPage() {
                     <p className="font-mono text-xs text-black/55">
                       {project.description}
                     </p>
+                  ) : null}
+                  {project.nextAction ? (
+                    <div className="inline-flex items-center gap-2 border-2 border-yellow-400 bg-yellow-100 px-3 py-1 font-mono text-[10px]">
+                      <ArrowRight className="h-3 w-3 shrink-0 text-yellow-600" />
+                      <span className="uppercase tracking-[0.15em] text-yellow-700 font-bold">Next</span>
+                      <span className="text-yellow-900">{project.nextAction}</span>
+                    </div>
                   ) : null}
                 </div>
 
@@ -561,8 +689,30 @@ export default function ProjectChatPage() {
                             )}
                           </div>
 
-                          <div className="font-mono text-[10px] text-black/25">
-                            {format(new Date(message.createdAt), 'h:mm a')}
+                          <div className={`flex items-center gap-2 ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                            <span className="font-mono text-[10px] text-black/25">
+                              {format(new Date(message.createdAt), 'h:mm a')}
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => handleCopy(message.id, message.content)}
+                                className="flex h-5 w-5 items-center justify-center text-black/20 transition-colors hover:text-black/60"
+                                title="Copy"
+                              >
+                                {copiedId === message.id ? (
+                                  <Check className="h-3 w-3 text-black/60" />
+                                ) : (
+                                  <Copy className="h-3 w-3" />
+                                )}
+                              </button>
+                              <button
+                                onClick={() => void handleDeleteMessage(message.id)}
+                                className="flex h-5 w-5 items-center justify-center text-black/20 transition-colors hover:text-red-500"
+                                title="Delete"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </article>
@@ -617,7 +767,7 @@ export default function ProjectChatPage() {
           </section>
 
           {/* Context sidebar */}
-          <aside className="hidden border-l-2 border-black xl:flex xl:min-h-svh xl:flex-col">
+          <aside className="hidden border-l-2 border-black xl:flex xl:flex-col xl:overflow-y-auto">
             <div className="border-b-2 border-black px-5 py-5">
               <div className="flex items-center justify-between mb-4">
                 <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-black/35">Context</p>
@@ -674,6 +824,78 @@ export default function ProjectChatPage() {
                   </AccordionContent>
                 </AccordionItem>
               </Accordion>
+            </div>
+
+            {/* Tasks section */}
+            <div className="border-b-2 border-black px-5 py-5">
+              <div className="flex items-center justify-between mb-3">
+                <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-black/35">Tasks</p>
+                {project.taskCount > 0 ? (
+                  <span className="font-mono text-[10px] text-black/35">
+                    {project.completedTaskCount}/{project.taskCount}
+                  </span>
+                ) : null}
+              </div>
+
+              {project.taskCount > 0 ? (
+                <Progress
+                  value={(project.completedTaskCount / project.taskCount) * 100}
+                  className="h-1 rounded-none mb-4 bg-black/10 [&>div]:bg-black [&>div]:rounded-none"
+                />
+              ) : null}
+
+              <div className="space-y-1 mb-3">
+                {tasks.map((task, index) => {
+                  const TASK_COLORS = ['bg-yellow-100', 'bg-sky-100', 'bg-green-100', 'bg-pink-100', 'bg-violet-100', 'bg-orange-100'];
+                  const taskColor = TASK_COLORS[index % TASK_COLORS.length];
+                  return (
+                  <div key={task.id} className={`group flex items-start gap-2 px-2 py-1 ${task.completed ? 'bg-black/4' : taskColor}`}>
+                    <button
+                      onClick={() => void handleToggleTask(task)}
+                      className="mt-0.5 shrink-0 text-black/25 hover:text-black transition-colors"
+                    >
+                      {task.completed ? (
+                        <CheckCircle2 className="h-3.5 w-3.5 text-black" />
+                      ) : (
+                        <Circle className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                    <span className={`flex-1 font-mono text-[11px] leading-5 ${task.completed ? 'line-through text-black/25' : 'text-black/70'}`}>
+                      {task.title}
+                    </span>
+                    <button
+                      onClick={() => void handleDeleteTask(task.id)}
+                      className="shrink-0 opacity-0 group-hover:opacity-100 text-black/25 hover:text-black transition-all"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                  );
+                })}
+                {tasks.length === 0 ? (
+                  <p className="font-mono text-[10px] text-black/25 py-1">No tasks yet.</p>
+                ) : null}
+              </div>
+
+              <div className="flex items-center border border-black/15 focus-within:border-black transition-colors">
+                <input
+                  type="text"
+                  placeholder="Add a task..."
+                  value={taskInput}
+                  onChange={(e) => setTaskInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && taskInput.trim()) void handleAddTask();
+                  }}
+                  className="flex-1 border-0 bg-transparent px-2.5 py-1.5 font-mono text-[11px] placeholder:text-black/20 focus:outline-none"
+                />
+                <button
+                  onClick={() => void handleAddTask()}
+                  disabled={!taskInput.trim()}
+                  className="shrink-0 px-2 py-1.5 text-black/25 hover:text-black disabled:pointer-events-none transition-colors"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
 
             <div className="px-5 py-5">
@@ -795,6 +1017,31 @@ export default function ProjectChatPage() {
                   <Edit3 className="mr-2 h-3.5 w-3.5" />
                   Edit Context
                 </Button>
+              </div>
+
+              <div className="space-y-3 border-t border-black/10 pt-4">
+                <p className="font-mono text-[9px] uppercase tracking-[0.4em] text-black/30">Generate Tasks from MVP</p>
+                <Textarea
+                  placeholder="Paste your MVP scope, feature list, or PRD here..."
+                  value={mvpScopeInput}
+                  onChange={(e) => setMvpScopeInput(e.target.value)}
+                  className="rounded-none border-2 border-black/20 bg-white font-mono text-xs focus-visible:ring-0 focus-visible:border-black min-h-[80px] resize-none placeholder:text-black/25"
+                />
+                <Button
+                  onClick={() => void handleGenerateTasksFromMvp()}
+                  disabled={!mvpScopeInput.trim() || isGeneratingTasks}
+                  variant="outline"
+                  className="w-full rounded-none border-2 border-black bg-background font-mono text-xs uppercase tracking-[0.15em] text-black hover:bg-black hover:text-white transition-colors disabled:opacity-40"
+                >
+                  {isGeneratingTasks ? (
+                    <><RefreshCw className="mr-2 h-3.5 w-3.5 animate-spin" />Generating...</>
+                  ) : (
+                    <><Sparkles className="mr-2 h-3.5 w-3.5" />Generate Tasks</>
+                  )}
+                </Button>
+                <p className="font-mono text-[9px] text-black/30 leading-relaxed">
+                  Replaces existing tasks with AI-generated ones from your scope.
+                </p>
               </div>
 
               <div className="space-y-3 border-t-2 border-black pt-4">

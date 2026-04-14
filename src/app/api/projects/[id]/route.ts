@@ -4,6 +4,8 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { mapProject } from '@/lib/projects/mappers';
 import type { NewProjectInput } from '@/lib/projects/types';
 
+type ProjectPatchBody = Partial<NewProjectInput & { nextAction: string; mvpScope: string }>;
+
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
@@ -53,7 +55,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 
   const { id } = await context.params;
-  const body = (await request.json()) as Partial<NewProjectInput>;
+  const body = (await request.json()) as ProjectPatchBody;
 
   if (body.name !== undefined && !body.name.trim()) {
     return NextResponse.json({ error: 'Project name is required.' }, { status: 400 });
@@ -66,6 +68,8 @@ export async function PATCH(request: Request, context: RouteContext) {
     ...(body.goals !== undefined ? { goals: body.goals.trim() } : {}),
     ...(body.blockers !== undefined ? { blockers: body.blockers.trim() } : {}),
     ...(body.targetUser !== undefined ? { target_user: body.targetUser.trim() } : {}),
+    ...(body.nextAction !== undefined ? { next_action: body.nextAction } : {}),
+    ...(body.mvpScope !== undefined ? { mvp_scope: body.mvpScope } : {}),
     last_active: new Date().toISOString(),
   };
 
