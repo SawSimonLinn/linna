@@ -2,6 +2,13 @@ import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
   /* config options here */
+  serverExternalPackages: [
+    'genkit',
+    '@genkit-ai/ai',
+    '@genkit-ai/core',
+    '@genkit-ai/google-genai',
+    '@opentelemetry/sdk-node',
+  ],
   typescript: {
     ignoreBuildErrors: true,
   },
