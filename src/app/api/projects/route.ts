@@ -1,17 +1,16 @@
-import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { mapProject } from '@/lib/projects/mappers';
 import type { NewProjectInput } from '@/lib/projects/types';
 
 export async function GET() {
-  const { userId } = await auth();
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  if (!userId) {
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from('projects')
     .select('*')
@@ -25,9 +24,10 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const { userId } = await auth();
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  if (!userId) {
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -37,11 +37,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Project name is required.' }, { status: 400 });
   }
 
-  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from('projects')
     .insert({
-      user_id: userId,
+      user_id: user.id,
       name: body.name.trim(),
       description: body.description?.trim() || '',
       tech_stack: body.techStack?.trim() || '',

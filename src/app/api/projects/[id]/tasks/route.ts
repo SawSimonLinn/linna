@@ -1,4 +1,3 @@
-import { auth } from '@clerk/nextjs/server';
 import { openai } from '@ai-sdk/openai';
 import { generateText, Output } from 'ai';
 import { NextResponse } from 'next/server';
@@ -11,11 +10,11 @@ type RouteContext = {
 };
 
 export async function GET(_: Request, context: RouteContext) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { id } = await context.params;
-  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from('tasks')
     .select('*')
@@ -28,13 +27,12 @@ export async function GET(_: Request, context: RouteContext) {
 }
 
 export async function POST(request: Request, context: RouteContext) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { id } = await context.params;
   const body = (await request.json()) as { title?: string; fromMvp?: string };
-
-  const supabase = await createSupabaseServerClient();
 
   // Generate tasks from MVP scope via AI
   if (body.fromMvp) {

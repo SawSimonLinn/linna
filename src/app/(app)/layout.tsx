@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { SignOutButton, useUser } from '@clerk/nextjs';
+import { useSupabaseAuth } from '@/context/supabase-provider';
+import { signOut } from '@/app/actions/auth';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bot, Compass, LogOut, MoreHorizontal, Pin, PinOff, Plus, Settings, Trash2, Pencil } from 'lucide-react';
 import type { Project } from '@/lib/projects/types';
@@ -40,7 +41,21 @@ import {
   SidebarProvider,
   SidebarSeparator,
   SidebarTrigger,
+  useSidebar,
 } from '@/components/ui/sidebar';
+
+function CollapsedLogoButton() {
+  const { toggleSidebar } = useSidebar();
+  return (
+    <button
+      onClick={toggleSidebar}
+      title="Expand sidebar"
+      className="flex h-9 w-9 items-center justify-center border-2 border-foreground bg-foreground text-background hover:bg-background hover:text-foreground transition-colors duration-150"
+    >
+      <LinnaMark className="h-4 w-4" />
+    </button>
+  );
+}
 
 const PIN_STORAGE_KEY = 'linna:pinned_projects';
 const MAX_PINS = 3;
@@ -125,26 +140,21 @@ function ProjectItem({
           <SidebarMenuButton
             asChild
             isActive={isActive}
-            className="h-auto w-full rounded-none p-0 data-[active=true]:bg-background data-[active=true]:text-foreground"
+            tooltip={project.name}
+            size="lg"
+            className="rounded-none data-[active=true]:bg-background data-[active=true]:text-foreground group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:!p-2"
           >
-            <Link
-              href={`/project/${project.id}`}
-              className="grid w-full grid-cols-[14px_minmax(0,1fr)] items-start gap-x-3 gap-y-1 px-2 py-2.5 pr-8"
-            >
-              <Bot className="mt-0.5 h-3.5 w-3.5 shrink-0 text-foreground/40 opacity-60" />
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <p className="truncate font-mono text-xs font-semibold leading-4 text-foreground">
-                    {project.name}
-                  </p>
-                  {isPinned && (
-                    <Pin className="h-2.5 w-2.5 shrink-0 text-foreground/30 opacity-60" />
-                  )}
-                </div>
-                <p className="mt-0.5 line-clamp-1 font-mono text-[10px] leading-4 text-foreground/40">
+            <Link href={`/project/${project.id}`} className="pr-8 group-data-[collapsible=icon]:!pr-0">
+              <Bot className="shrink-0 text-foreground/60" />
+              <span className="flex min-w-0 flex-col">
+                <span className="flex items-center gap-1.5 truncate font-mono text-xs font-semibold leading-4 text-foreground">
+                  {project.name}
+                  {isPinned && <Pin className="h-2.5 w-2.5 shrink-0 text-foreground/30" />}
+                </span>
+                <span className="line-clamp-1 font-mono text-[10px] leading-4 text-foreground/40">
                   {project.description || 'No description'}
-                </p>
-              </div>
+                </span>
+              </span>
             </Link>
           </SidebarMenuButton>
         )}
@@ -153,7 +163,7 @@ function ProjectItem({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
-                className="absolute right-1 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center text-foreground/0 transition-colors group-hover/item:text-foreground/40 hover:!text-foreground focus-visible:text-foreground/40 data-[state=open]:text-foreground"
+                className="absolute right-1 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center text-foreground/0 transition-colors group-hover/item:text-foreground/40 hover:!text-foreground focus-visible:text-foreground/40 data-[state=open]:text-foreground group-data-[collapsible=icon]:hidden"
                 onClick={(e) => e.preventDefault()}
               >
                 <MoreHorizontal className="h-3.5 w-3.5" />
@@ -213,7 +223,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const { user } = useUser();
+  const { user } = useSupabaseAuth();
 
   useEffect(() => {
     setPinnedIds(loadPinnedIds());
@@ -274,14 +284,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     setDeleteTarget(null);
   };
 
-  const userName =
-    [user?.firstName, user?.lastName].filter(Boolean).join(' ') ||
-    user?.username ||
-    user?.primaryEmailAddress?.emailAddress ||
-    'Account';
-  const userInitials =
-    [user?.firstName?.[0], user?.lastName?.[0]].filter(Boolean).join('').toUpperCase() ||
-    userName.slice(0, 2).toUpperCase();
+  const userName = user?.user_metadata?.full_name || user?.email || 'Account';
+  const userInitials = userName.slice(0, 2).toUpperCase();
 
   const activeProject = useMemo(
     () => projects.find((project) => pathname.startsWith(`/project/${project.id}`)),
@@ -310,35 +314,54 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <>
       <SidebarProvider defaultOpen={true}>
         <div className="flex min-h-svh w-full bg-paper">
-          <Sidebar className="border-r-2 border-foreground bg-paper">
-            <SidebarHeader className="gap-4 border-b-2 border-foreground px-4 py-4">
-              <Link href="/dashboard" className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center border-2 border-foreground bg-foreground text-background">
-                  <LinnaMark className="h-4 w-4" />
-                </div>
-                <div>
-                  <p className="font-headline text-base font-black tracking-tight text-foreground">Linna</p>
-                  <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-foreground/35">Project memory</p>
-                </div>
-              </Link>
-              <Button
-                asChild
-                className="h-10 w-full justify-start rounded-none border-2 border-foreground bg-foreground px-4 font-mono text-xs uppercase tracking-[0.2em] text-background hover:bg-background hover:text-foreground transition-colors duration-150"
-              >
-                <Link href="/dashboard">
-                  <Plus className="mr-2 h-3.5 w-3.5" />
-                  New project
+          <Sidebar collapsible="icon" className="border-r-2 border-foreground bg-paper">
+            <SidebarHeader className="border-b-2 border-foreground p-0">
+              {/* Collapsed: centered logo (click to expand) + new project icon */}
+              <div className="hidden group-data-[collapsible=icon]:flex flex-col items-center gap-2 py-3">
+                <CollapsedLogoButton />
+                <Link
+                  href="/dashboard"
+                  title="New project"
+                  className="flex h-9 w-9 items-center justify-center border-2 border-dashed border-foreground/30 text-foreground/40 hover:border-foreground hover:text-foreground transition-colors duration-150"
+                >
+                  <Plus className="h-3.5 w-3.5" />
                 </Link>
-              </Button>
+              </div>
+
+              {/* Expanded: logo + collapse trigger + new project button */}
+              <div className="flex flex-col gap-3 px-4 py-4 group-data-[collapsible=icon]:hidden">
+                <div className="flex items-center justify-between">
+                  <Link href="/dashboard" className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center border-2 border-foreground bg-foreground text-background">
+                      <LinnaMark className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <p className="font-headline text-base font-black tracking-tight text-foreground">Linna</p>
+                      <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-foreground/35">Project memory</p>
+                    </div>
+                  </Link>
+                  <SidebarTrigger className="h-7 w-7 shrink-0 rounded-none text-foreground/30 hover:bg-foreground/8 hover:text-foreground transition-colors duration-150" />
+                </div>
+                <Button
+                  asChild
+                  className="h-10 w-full justify-start rounded-none border-2 border-foreground bg-foreground px-4 font-mono text-xs uppercase tracking-[0.2em] text-background hover:bg-background hover:text-foreground transition-colors duration-150"
+                >
+                  <Link href="/dashboard">
+                    <Plus className="mr-2 h-3.5 w-3.5" />
+                    New project
+                  </Link>
+                </Button>
+              </div>
             </SidebarHeader>
 
-            <SidebarContent className="px-3 py-4">
+            <SidebarContent className="px-3 py-4 group-data-[collapsible=icon]:px-0">
               <SidebarGroup>
                 <SidebarMenu>
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       asChild
                       isActive={pathname === '/dashboard'}
+                      tooltip="Workspace"
                       className="h-10 rounded-none font-mono text-xs uppercase tracking-[0.2em] data-[active=true]:bg-background data-[active=true]:text-foreground"
                     >
                       <Link href="/dashboard">
@@ -382,9 +405,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </SidebarGroup>
             </SidebarContent>
 
-            <SidebarFooter className="gap-3 border-t-2 border-foreground px-4 py-4">
+            <SidebarFooter className="border-t-2 border-foreground p-0">
+              {/* Active project box — hidden when collapsed */}
               {activeProject ? (
-                <div className="border-2 border-foreground bg-background/50 p-3">
+                <div className="mx-4 mt-4 border-2 border-foreground bg-background/50 p-3 group-data-[collapsible=icon]:hidden">
                   <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-foreground/35 mb-1.5">Active</p>
                   <p className="truncate font-mono text-xs font-bold text-foreground">{activeProject.name}</p>
                   <p className="mt-0.5 line-clamp-1 font-mono text-[10px] text-foreground/40">
@@ -396,14 +420,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               {/* Profile — single click opens dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="flex w-full items-center gap-3 border-2 border-foreground bg-background/40 p-3 text-left transition-colors hover:bg-background/70">
+                  <button className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-background/70 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
                     <Avatar className="h-8 w-8 shrink-0 rounded-none border-2 border-foreground">
-                      <AvatarImage src={user?.imageUrl} />
+                      <AvatarImage src={user?.user_metadata?.avatar_url} />
                       <AvatarFallback className="rounded-none bg-foreground font-mono text-xs text-background">
                         {userInitials}
                       </AvatarFallback>
                     </Avatar>
-                    <div className="min-w-0 flex-1">
+                    <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
                       <p className="truncate font-mono text-xs font-semibold text-foreground">{userName}</p>
                       <p className="font-mono text-[10px] text-foreground/35">Linna workspace</p>
                     </div>
@@ -421,18 +445,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator className="bg-foreground/15" />
-                  <SignOutButton>
-                    <DropdownMenuItem className="cursor-pointer rounded-none px-3 py-2.5 font-mono text-xs text-red-600 focus:bg-red-600 focus:text-white">
-                      <LogOut className="mr-2 h-3.5 w-3.5" />
-                      Sign out
-                    </DropdownMenuItem>
-                  </SignOutButton>
+                  <DropdownMenuItem
+                    className="cursor-pointer rounded-none px-3 py-2.5 font-mono text-xs text-red-600 focus:bg-red-600 focus:text-white"
+                    onSelect={() => void signOut()}
+                  >
+                    <LogOut className="mr-2 h-3.5 w-3.5" />
+                    Sign out
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </SidebarFooter>
           </Sidebar>
 
           <div className="flex h-svh min-w-0 flex-1 flex-col overflow-hidden">
+            {/* Mobile-only top bar */}
             <div className="flex items-center justify-between border-b-2 border-foreground px-4 py-3 md:hidden">
               <div className="flex items-center gap-3">
                 <SidebarTrigger className="h-9 w-9 rounded-none border-2 border-foreground bg-background" />

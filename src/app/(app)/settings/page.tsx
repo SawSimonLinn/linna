@@ -1,8 +1,9 @@
 'use client';
 
-import { useUser, SignOutButton } from '@clerk/nextjs';
 import { useEffect, useState } from 'react';
-import { ExternalLink, LogOut, Shield, Sliders, User } from 'lucide-react';
+import { LogOut, Shield, Sliders, User } from 'lucide-react';
+import { useSupabaseAuth } from '@/context/supabase-provider';
+import { signOut } from '@/app/actions/auth';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -73,7 +74,7 @@ function PrefRow({ label, description, checked, onCheckedChange }: PrefRowProps)
 }
 
 export default function SettingsPage() {
-  const { user } = useUser();
+  const { user } = useSupabaseAuth();
   const [prefs, setPrefs] = useState<Preferences>(DEFAULT_PREFS);
   const [mounted, setMounted] = useState(false);
 
@@ -90,15 +91,9 @@ export default function SettingsPage() {
     });
   };
 
-  const userName =
-    [user?.firstName, user?.lastName].filter(Boolean).join(' ') ||
-    user?.username ||
-    user?.primaryEmailAddress?.emailAddress ||
-    'Account';
-  const userEmail = user?.primaryEmailAddress?.emailAddress ?? '';
-  const userInitials =
-    [user?.firstName?.[0], user?.lastName?.[0]].filter(Boolean).join('').toUpperCase() ||
-    userName.slice(0, 2).toUpperCase();
+  const userName = user?.user_metadata?.full_name || user?.email || 'Account';
+  const userEmail = user?.email ?? '';
+  const userInitials = userName.slice(0, 2).toUpperCase();
 
   return (
     <div className="min-h-svh bg-background text-foreground">
@@ -119,7 +114,7 @@ export default function SettingsPage() {
         <Section title="Profile" icon={<User className="h-3.5 w-3.5" />}>
           <div className="flex items-center gap-5">
             <Avatar className="h-16 w-16 rounded-none border-2 border-foreground">
-              <AvatarImage src={user?.imageUrl} />
+              <AvatarImage src={user?.user_metadata?.avatar_url} />
               <AvatarFallback className="rounded-none bg-foreground font-mono text-lg text-background">
                 {userInitials}
               </AvatarFallback>
@@ -130,19 +125,9 @@ export default function SettingsPage() {
                 <p className="mt-1 font-mono text-xs text-foreground/45">{userEmail}</p>
               )}
               <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.25em] text-foreground/30">
-                Managed by Clerk
+                Linna account
               </p>
             </div>
-            <Button
-              asChild
-              variant="outline"
-              className="shrink-0 rounded-none border-2 border-foreground bg-background font-mono text-xs uppercase tracking-[0.15em] hover:bg-foreground hover:text-background transition-colors"
-            >
-              <a href="https://accounts.clerk.dev/user" target="_blank" rel="noopener noreferrer">
-                Edit profile
-                <ExternalLink className="ml-2 h-3 w-3" />
-              </a>
-            </Button>
           </div>
         </Section>
 
@@ -204,15 +189,14 @@ export default function SettingsPage() {
                 You will be redirected to the login page.
               </p>
             </div>
-            <SignOutButton>
-              <Button
-                variant="outline"
-                className="rounded-none border-2 border-foreground bg-background font-mono text-xs uppercase tracking-[0.15em] hover:bg-foreground hover:text-background transition-colors"
-              >
-                <LogOut className="mr-2 h-3.5 w-3.5" />
-                Sign out
-              </Button>
-            </SignOutButton>
+            <Button
+              variant="outline"
+              onClick={() => void signOut()}
+              className="rounded-none border-2 border-foreground bg-background font-mono text-xs uppercase tracking-[0.15em] hover:bg-foreground hover:text-background transition-colors"
+            >
+              <LogOut className="mr-2 h-3.5 w-3.5" />
+              Sign out
+            </Button>
           </div>
         </Section>
 

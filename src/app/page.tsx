@@ -1,4 +1,4 @@
-import { auth } from '@clerk/nextjs/server';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { LinnaMark } from '@/components/linna-mark';
@@ -22,9 +22,10 @@ function GithubIcon({ className }: { className?: string }) {
 }
 
 export default async function LandingPage() {
-  const { userId } = await auth();
-  const primaryHref = userId ? '/dashboard' : '/sign-up';
-  const primaryLabel = userId ? 'Go to dashboard' : 'Get started free';
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const primaryHref = user ? '/dashboard' : '/sign-up';
+  const primaryLabel = user ? 'Go to dashboard' : 'Get started free';
 
   return (
     <div className="flex flex-col min-h-screen bg-paper font-body">

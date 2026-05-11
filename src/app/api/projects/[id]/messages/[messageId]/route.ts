@@ -1,4 +1,3 @@
-import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
@@ -7,21 +6,20 @@ type RouteContext = {
 };
 
 export async function DELETE(_: Request, context: RouteContext) {
-  const { userId } = await auth();
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  if (!userId) {
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const { id, messageId } = await context.params;
-  const supabase = await createSupabaseServerClient();
 
-  // Verify the message belongs to a project owned by this user
   const { data: project } = await supabase
     .from('projects')
     .select('id')
     .eq('id', id)
-    .eq('user_id', userId)
+    .eq('user_id', user.id)
     .single();
 
   if (!project) {

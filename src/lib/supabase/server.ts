@@ -1,25 +1,25 @@
-import { auth } from '@clerk/nextjs/server';
-import { createClient } from '@supabase/supabase-js';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 import { supabaseEnv } from '@/lib/supabase/env';
 import type { Database } from '@/lib/supabase/types';
 
 export async function createSupabaseServerClient() {
-  const { getToken } = await auth();
+  const cookieStore = await cookies();
 
-  return createClient<Database>(supabaseEnv.url, supabaseEnv.anonKey, {
-    accessToken: async () => {
-      if (supabaseEnv.jwtTemplate) {
-        return getToken({
-          template: supabaseEnv.jwtTemplate,
-        });
-      }
-
-      return getToken();
-    },
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
+  return createServerClient<Database>(supabaseEnv.url, supabaseEnv.anonKey, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll();
+      },
+      setAll(cookiesToSet) {
+        try {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, options),
+          );
+        } catch {
+          // Called from a Server Component — session refresh is handled by middleware
+        }
+      },
     },
   });
 }

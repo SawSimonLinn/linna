@@ -1,4 +1,3 @@
-import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { mapProject } from '@/lib/projects/mappers';
@@ -11,14 +10,14 @@ type RouteContext = {
 };
 
 export async function GET(_: Request, context: RouteContext) {
-  const { userId } = await auth();
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  if (!userId) {
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const { id } = await context.params;
-  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.from('projects').select('*').eq('id', id).single();
 
   if (error) {
@@ -30,14 +29,14 @@ export async function GET(_: Request, context: RouteContext) {
 }
 
 export async function DELETE(_: Request, context: RouteContext) {
-  const { userId } = await auth();
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  if (!userId) {
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const { id } = await context.params;
-  const supabase = await createSupabaseServerClient();
   const { error } = await supabase.from('projects').delete().eq('id', id);
 
   if (error) {
@@ -48,9 +47,10 @@ export async function DELETE(_: Request, context: RouteContext) {
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
-  const { userId } = await auth();
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  if (!userId) {
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -73,7 +73,6 @@ export async function PATCH(request: Request, context: RouteContext) {
     last_active: new Date().toISOString(),
   };
 
-  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from('projects')
     .update(updates)

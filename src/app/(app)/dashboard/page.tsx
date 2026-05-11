@@ -148,22 +148,22 @@ export default function Dashboard() {
     <div className="min-h-svh bg-paper text-foreground">
 
       {/* ─── Page header ──────────────────────────────────────── */}
-      <div className="border-b-2 border-foreground px-6 py-8 md:px-12 md:py-10 bg-paper">
+      <div className="border-b-2 border-foreground px-6 py-6 md:px-10 md:py-8 bg-paper">
         <div className="mx-auto max-w-5xl">
-          <div className="flex items-end justify-between gap-6">
+          <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-foreground/35 mb-3">
+              <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-foreground/35 mb-2">
                 Linna / Workspace
               </p>
-              <h1 className="font-headline text-5xl font-black leading-none tracking-tight md:text-7xl">
+              <h1 className="font-headline text-4xl font-black leading-none tracking-tight md:text-5xl">
                 Projects
               </h1>
             </div>
 
-            <div className="flex items-end gap-6">
+            <div className="flex items-center gap-4">
               <div className="hidden text-right md:block">
                 <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-foreground/30">Total</p>
-                <p className="font-mono text-7xl font-black leading-none text-foreground/8 select-none">
+                <p className="font-mono text-3xl font-black leading-none text-foreground/20 select-none">
                   {String(projects.length).padStart(2, '0')}
                 </p>
               </div>
@@ -176,8 +176,8 @@ export default function Dashboard() {
                 }}
               >
                 <DialogTrigger asChild>
-                  <Button className="h-12 rounded-none border-2 border-foreground bg-foreground px-6 font-mono text-sm text-background paper-btn-dark">
-                    <Plus className="mr-2 h-4 w-4" />
+                  <Button className="h-10 rounded-none border-2 border-foreground bg-foreground px-5 font-mono text-xs text-background paper-btn-dark">
+                    <Plus className="mr-2 h-3.5 w-3.5" />
                     New project
                   </Button>
                 </DialogTrigger>

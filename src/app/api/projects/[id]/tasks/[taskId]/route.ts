@@ -1,4 +1,3 @@
-import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { mapTask } from '@/lib/projects/mappers';
@@ -8,13 +7,13 @@ type RouteContext = {
 };
 
 export async function PATCH(request: Request, context: RouteContext) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { id, taskId } = await context.params;
   const body = (await request.json()) as { completed?: boolean; title?: string };
 
-  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from('tasks')
     .update({
@@ -28,7 +27,6 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Sync denormalized counts on project
   const { data: allTasks } = await supabase
     .from('tasks')
     .select('completed')
@@ -48,11 +46,11 @@ export async function PATCH(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(_: Request, context: RouteContext) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { id, taskId } = await context.params;
-  const supabase = await createSupabaseServerClient();
 
   const { error } = await supabase
     .from('tasks')

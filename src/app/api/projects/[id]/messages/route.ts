@@ -1,4 +1,3 @@
-import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { mapMessage } from '@/lib/projects/mappers';
@@ -11,14 +10,14 @@ type RouteContext = {
 type NewMessage = Pick<Database['public']['Tables']['messages']['Insert'], 'content' | 'role'>;
 
 export async function GET(_: Request, context: RouteContext) {
-  const { userId } = await auth();
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  if (!userId) {
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const { id } = await context.params;
-  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from('messages')
     .select('*')
@@ -33,9 +32,10 @@ export async function GET(_: Request, context: RouteContext) {
 }
 
 export async function POST(request: Request, context: RouteContext) {
-  const { userId } = await auth();
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  if (!userId) {
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -46,7 +46,6 @@ export async function POST(request: Request, context: RouteContext) {
     return NextResponse.json({ error: 'Message content and role are required.' }, { status: 400 });
   }
 
-  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from('messages')
     .insert({

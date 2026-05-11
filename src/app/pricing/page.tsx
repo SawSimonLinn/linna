@@ -1,4 +1,4 @@
-import { auth } from '@clerk/nextjs/server';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { LinnaMark } from '@/components/linna-mark';
@@ -58,8 +58,9 @@ const FAQ = [
 ];
 
 export default async function PricingPage() {
-  const { userId } = await auth();
-  const ctaHref = userId ? '/dashboard' : '/sign-up';
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const ctaHref = user ? '/dashboard' : '/sign-up';
 
   return (
     <div className="flex flex-col min-h-screen bg-paper font-body">
@@ -84,7 +85,7 @@ export default async function PricingPage() {
             asChild
             className="border-2 border-foreground bg-foreground text-background paper-btn-dark font-bold"
           >
-            <Link href={ctaHref}>{userId ? 'Dashboard' : 'Get started free'}</Link>
+            <Link href={ctaHref}>{user ? 'Dashboard' : 'Get started free'}</Link>
           </Button>
         </div>
       </header>
