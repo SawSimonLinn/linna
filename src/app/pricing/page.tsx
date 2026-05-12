@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { LinnaMark } from '@/components/linna-mark';
 import { Check, X, ArrowRight, Zap } from 'lucide-react';
+import { UpgradeButton } from '@/components/upgrade-button';
 
 export const metadata = {
   title: 'Pricing — Linna',
@@ -160,15 +161,7 @@ export default async function PricingPage() {
                 </div>
                 <div className="font-headline text-5xl font-bold mb-1">$12</div>
                 <div className="text-sm text-background/50 mb-8">per month</div>
-                <Button
-                  asChild
-                  className="w-full border-2 border-background bg-yellow-300 text-foreground hover:bg-yellow-200 paper-btn font-bold mb-8"
-                >
-                  <Link href={ctaHref}>
-                    Upgrade to Pro
-                    <ArrowRight className="w-4 h-4 ml-2" />
-                  </Link>
-                </Button>
+                <UpgradeButton isLoggedIn={!!user} />
                 <ul className="space-y-3 text-sm">
                   {PRO_FEATURES.map((f) => (
                     <li key={f} className="flex items-center gap-2">

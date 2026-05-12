@@ -8,8 +8,16 @@ export async function GET(request: Request) {
 
   if (code) {
     const supabase = await createSupabaseServerClient()
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
-    if (!error) {
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+    if (!error && data.session) {
+      const { session } = data
+      if (session.provider_token) {
+        await supabase.from('profiles').upsert({
+          id: session.user.id,
+          github_token: session.provider_token,
+          updated_at: new Date().toISOString(),
+        })
+      }
       return NextResponse.redirect(`${origin}${next}`)
     }
   }

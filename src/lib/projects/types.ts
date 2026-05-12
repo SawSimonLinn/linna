@@ -13,6 +13,11 @@ export type Project = {
   mvpScope: string;
   taskCount: number;
   completedTaskCount: number;
+  githubRepoUrl: string | null;
+  githubRepoName: string | null;
+  githubOwner: string | null;
+  readme: string | null;
+  lastSyncedAt: string | null;
 };
 
 export type Message = {

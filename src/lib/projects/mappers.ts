@@ -21,6 +21,11 @@ export function mapProject(row: ProjectRow): Project {
     mvpScope: row.mvp_scope,
     taskCount: row.task_count,
     completedTaskCount: row.completed_task_count,
+    githubRepoUrl: row.github_repo_url,
+    githubRepoName: row.github_repo_name,
+    githubOwner: row.github_owner,
+    readme: row.readme,
+    lastSyncedAt: row.last_synced_at,
   };
 }
 
