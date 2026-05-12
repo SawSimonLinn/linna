@@ -31,6 +31,28 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  // Check plan and enforce free tier limit
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('plan')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  const plan = profile?.plan ?? 'free';
+
+  if (plan === 'free') {
+    const { count } = await supabase
+      .from('projects')
+      .select('id', { count: 'exact', head: true });
+
+    if ((count ?? 0) >= 1) {
+      return NextResponse.json(
+        { error: 'Free plan is limited to 1 project. Upgrade to Pro for unlimited projects.', code: 'PLAN_LIMIT' },
+        { status: 403 },
+      );
+    }
+  }
+
   const body = (await request.json()) as Partial<NewProjectInput>;
 
   if (!body.name?.trim()) {

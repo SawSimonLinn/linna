@@ -4,14 +4,18 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
 import {
+  ArrowRight,
   ArrowUpRight,
   Clock,
   Edit2,
+  GitBranch,
   MessageSquare,
   MoreVertical,
   Plus,
   RefreshCw,
+  Search,
   Trash2,
+  Zap,
 } from 'lucide-react';
 import type { NewProjectInput, Project } from '@/lib/projects/types';
 import { Progress } from '@/components/ui/progress';
@@ -22,7 +26,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import {
   DropdownMenu,
@@ -34,9 +37,25 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 
+type GithubRepo = {
+  id: number;
+  name: string;
+  fullName: string;
+  description: string | null;
+  url: string;
+  owner: string;
+  language: string | null;
+  private: boolean;
+  updatedAt: string;
+};
+
+type PlanInfo = { plan: 'free' | 'pro'; projectCount: number };
+
 export default function Dashboard() {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [planInfo, setPlanInfo] = useState<PlanInfo>({ plan: 'free', projectCount: 0 });
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [newProject, setNewProject] = useState<NewProjectInput>({
     name: '',
@@ -50,8 +69,21 @@ export default function Dashboard() {
   const [techInput, setTechInput] = useState('');
   const [openingProjectId, setOpeningProjectId] = useState<string | null>(null);
 
+  // GitHub import state
+  const [modalTab, setModalTab] = useState<'manual' | 'github'>('github');
+  const [repos, setRepos] = useState<GithubRepo[]>([]);
+  const [reposLoading, setReposLoading] = useState(false);
+  const [reposError, setReposError] = useState<string | null>(null);
+  const [importingRepo, setImportingRepo] = useState<string | null>(null);
+  const [repoSearch, setRepoSearch] = useState('');
+  const [selectedRepo, setSelectedRepo] = useState<GithubRepo | null>(null);
+  const [importExtras, setImportExtras] = useState({ goals: '', blockers: '', targetUser: '' });
+  const [syncingProjectId, setSyncingProjectId] = useState<string | null>(null);
+
   useEffect(() => {
     void loadProjects();
+    void loadRepos();
+    void fetch('/api/user/plan').then((r) => r.json()).then((d) => setPlanInfo(d as PlanInfo));
   }, []);
 
   const loadProjects = async () => {
@@ -69,6 +101,10 @@ export default function Dashboard() {
     setEditingProjectId(null);
     setTechTags([]);
     setTechInput('');
+    setModalTab('github');
+    setRepoSearch('');
+    setSelectedRepo(null);
+    setImportExtras({ goals: '', blockers: '', targetUser: '' });
     setNewProject({
       name: '',
       description: '',
@@ -77,6 +113,61 @@ export default function Dashboard() {
       blockers: '',
       targetUser: '',
     });
+  };
+
+  const loadRepos = async () => {
+    setReposLoading(true);
+    setReposError(null);
+    const res = await fetch('/api/github/repos');
+    if (!res.ok) {
+      const { error } = (await res.json()) as { error: string };
+      setReposError(error);
+    } else {
+      const data = (await res.json()) as GithubRepo[];
+      setRepos(data);
+    }
+    setReposLoading(false);
+  };
+
+  const handleImportRepo = async () => {
+    if (!selectedRepo) return;
+    setImportingRepo(selectedRepo.fullName);
+    const res = await fetch('/api/github/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        owner: selectedRepo.owner,
+        repo: selectedRepo.name,
+        goals: importExtras.goals,
+        blockers: importExtras.blockers,
+        targetUser: importExtras.targetUser,
+      }),
+    });
+    if (res.ok) {
+      const project = (await res.json()) as Project;
+      setProjects((prev) => [project, ...prev]);
+      setIsModalOpen(false);
+      resetProjectForm();
+    }
+    setImportingRepo(null);
+  };
+
+  const handleSync = async (project: Project) => {
+    setSyncingProjectId(project.id);
+    const res = await fetch(`/api/projects/${project.id}/sync`, { method: 'POST' });
+    if (res.ok) {
+      const updated = (await res.json()) as Project;
+      setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+    }
+    setSyncingProjectId(null);
+  };
+
+  const openNewProject = () => {
+    if (planInfo.plan === 'free' && projects.length >= 1) {
+      setShowUpgradePrompt(true);
+    } else {
+      setIsModalOpen(true);
+    }
   };
 
   const handleCreateProject = async () => {
@@ -132,7 +223,20 @@ export default function Dashboard() {
     }
   };
 
-  const featuredProjects = useMemo(() => projects.slice(0, 6), [projects]);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const featuredProjects = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const filtered = q
+      ? projects.filter(
+          (p) =>
+            p.name.toLowerCase().includes(q) ||
+            p.description?.toLowerCase().includes(q) ||
+            p.techStack?.toLowerCase().includes(q),
+        )
+      : projects;
+    return filtered.slice(0, 6);
+  }, [projects, searchQuery]);
 
   // Pastel paper colours cycling per card index
   const CARD_COLORS = [
@@ -161,12 +265,40 @@ export default function Dashboard() {
             </div>
 
             <div className="flex items-center gap-4">
+              <div className="relative hidden md:block">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 text-foreground/40" />
+                <input
+                  type="text"
+                  placeholder="Search projects..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-8 pr-4 py-2 font-mono text-[11px] uppercase tracking-[0.1em] border-2 border-foreground/20 bg-transparent text-foreground placeholder:text-foreground/30 focus:border-foreground focus:outline-none transition-colors w-48"
+                />
+              </div>
+
               <div className="hidden text-right md:block">
                 <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-foreground/30">Total</p>
                 <p className="font-mono text-3xl font-black leading-none text-foreground/20 select-none">
                   {String(projects.length).padStart(2, '0')}
                 </p>
               </div>
+
+              {/* Plan badge */}
+              {planInfo.plan === 'free' && (
+                <Link
+                  href="/pricing"
+                  className="hidden md:inline-flex items-center gap-1.5 border-2 border-yellow-400 bg-yellow-100 px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.2em] font-bold text-foreground hover:bg-yellow-200 transition-colors"
+                >
+                  <Zap className="h-3 w-3" />
+                  Free
+                </Link>
+              )}
+              {planInfo.plan === 'pro' && (
+                <span className="hidden md:inline-flex items-center gap-1.5 border-2 border-foreground bg-foreground px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.2em] font-bold text-background">
+                  <Zap className="h-3 w-3" />
+                  Pro
+                </span>
+              )}
 
               <Dialog
                 open={isModalOpen}
@@ -175,143 +307,303 @@ export default function Dashboard() {
                   if (!open) resetProjectForm();
                 }}
               >
-                <DialogTrigger asChild>
-                  <Button className="h-10 rounded-none border-2 border-foreground bg-foreground px-5 font-mono text-xs text-background paper-btn-dark">
-                    <Plus className="mr-2 h-3.5 w-3.5" />
-                    New project
-                  </Button>
-                </DialogTrigger>
+                <Button
+                  onClick={openNewProject}
+                  className="h-10 rounded-none border-2 border-foreground bg-foreground px-5 font-mono text-xs text-background paper-btn-dark"
+                >
+                  <Plus className="mr-2 h-3.5 w-3.5" />
+                  New project
+                </Button>
                 <DialogContent className="max-w-lg rounded-none border-2 border-foreground bg-paper paper-shadow-lg">
                   <DialogHeader>
                     <DialogTitle className="font-mono text-base font-bold uppercase tracking-[0.2em]">
                       {editingProjectId ? '— Edit Project' : '— New Project'}
                     </DialogTitle>
                   </DialogHeader>
-                  <div className="grid gap-4 py-4">
-                    <div className="grid gap-2">
-                      <Label htmlFor="name" className="font-mono text-xs uppercase tracking-[0.2em] text-foreground/60">
-                        Project Name
-                      </Label>
-                      <Input
-                        id="name"
-                        placeholder="e.g. Linna, My SaaS App"
-                        value={newProject.name}
-                        onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
-                        className="rounded-none border-2 border-foreground bg-white font-mono text-sm focus-visible:ring-0 focus-visible:border-foreground"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="description" className="font-mono text-xs uppercase tracking-[0.2em] text-foreground/60">
-                        Description
-                      </Label>
-                      <Input
-                        id="description"
-                        placeholder="One line — what are you building?"
-                        value={newProject.description}
-                        onChange={(e) => setNewProject({ ...newProject, description: e.target.value })}
-                        className="rounded-none border-2 border-foreground bg-white font-mono text-sm focus-visible:ring-0 focus-visible:border-foreground"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="tech" className="font-mono text-xs uppercase tracking-[0.2em] text-foreground/60">
-                        Tech Stack
-                      </Label>
-                      <div
-                        className="flex min-h-10 w-full cursor-text flex-wrap items-center gap-1.5 border-2 border-foreground bg-white px-2 py-1.5 text-sm focus-within:outline-none"
-                        onClick={() => document.getElementById('tech')?.focus()}
+
+                  {/* Tab switcher — only show for new projects */}
+                  {!editingProjectId && (
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+                      <button
+                        onClick={() => setModalTab('github')}
+                        style={{ flex: 1, minWidth: 0 }}
+                        className={`py-3 font-mono text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-2 border-2 transition-colors ${
+                          modalTab === 'github'
+                            ? 'border-foreground bg-foreground text-background'
+                            : 'border-foreground/30 bg-transparent text-foreground/50 hover:border-foreground hover:text-foreground'
+                        }`}
                       >
-                        {techTags.map((tag, index) => (
-                          <span
-                            key={index}
-                            className="inline-flex shrink-0 items-center gap-1 border border-foreground/30 bg-yellow-100 px-2 py-0.5 font-mono text-[11px] text-foreground select-none"
-                          >
-                            {tag}
+                        <GitBranch className="w-3 h-3" />
+                        GitHub
+                      </button>
+                      <button
+                        onClick={() => setModalTab('manual')}
+                        style={{ flex: 1, minWidth: 0 }}
+                        className={`py-3 font-mono text-[10px] uppercase tracking-[0.2em] border-2 transition-colors ${
+                          modalTab === 'manual'
+                            ? 'border-foreground bg-foreground text-background'
+                            : 'border-foreground/30 bg-transparent text-foreground/50 hover:border-foreground hover:text-foreground'
+                        }`}
+                      >
+                        Manual
+                      </button>
+                    </div>
+                  )}
+
+                  {/* GitHub import tab */}
+                  {modalTab === 'github' && !editingProjectId ? (
+                    <div style={{ minWidth: 0 }}>
+                      {selectedRepo ? (
+                        /* Step 2 — fill in project details */
+                        <div className="grid gap-4">
+                          <div className="flex items-center gap-2 border-2 border-foreground/20 bg-white px-4 py-3">
+                            <GitBranch className="w-3.5 h-3.5 shrink-0 text-foreground/50" />
+                            <div className="min-w-0">
+                              <p className="font-mono text-xs font-bold truncate">{selectedRepo.name}</p>
+                              {selectedRepo.description && (
+                                <p className="font-mono text-[10px] text-foreground/50 truncate">{selectedRepo.description}</p>
+                              )}
+                            </div>
                             <button
-                              type="button"
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                setTechTags((prev) => prev.filter((_, i) => i !== index));
-                              }}
-                              className="flex h-3.5 w-3.5 items-center justify-center text-[10px] leading-none text-foreground/40 hover:text-foreground transition-colors"
+                              onClick={() => setSelectedRepo(null)}
+                              className="ml-auto font-mono text-[10px] uppercase tracking-[0.1em] text-foreground/40 hover:text-foreground transition-colors"
                             >
-                              ×
+                              Change
                             </button>
-                          </span>
-                        ))}
-                        <input
-                          id="tech"
-                          type="text"
-                          autoComplete="off"
-                          placeholder={techTags.length === 0 ? 'e.g. Next.js, Supabase' : ''}
-                          value={techInput}
-                          onChange={(e) => setTechInput(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === ' ' && techInput.trim()) {
-                              e.preventDefault();
-                              setTechTags((prev) => [...prev, techInput.trim()]);
-                              setTechInput('');
-                            } else if (e.key === 'Backspace' && techInput === '' && techTags.length > 0) {
-                              setTechTags((prev) => prev.slice(0, -1));
-                            } else if (e.key === 'Enter') {
-                              e.preventDefault();
-                              if (techInput.trim()) {
-                                setTechTags((prev) => [...prev, techInput.trim()]);
-                                setTechInput('');
-                              }
-                            }
-                          }}
-                          className="min-w-[120px] flex-1 border-0 bg-transparent py-0.5 font-mono text-sm focus:outline-none focus:ring-0 placeholder:text-foreground/30"
-                        />
+                          </div>
+                          <div className="grid gap-2">
+                            <Label className="font-mono text-xs uppercase tracking-[0.2em] text-foreground/60">Current Goals</Label>
+                            <Textarea
+                              placeholder="What are you trying to accomplish this week?"
+                              value={importExtras.goals}
+                              onChange={(e) => setImportExtras({ ...importExtras, goals: e.target.value })}
+                              className="rounded-none border-2 border-foreground bg-white font-mono text-sm focus-visible:ring-0 focus-visible:border-foreground resize-none"
+                              rows={3}
+                            />
+                          </div>
+                          <div className="grid gap-2">
+                            <Label className="font-mono text-xs uppercase tracking-[0.2em] text-foreground/60">Known Blockers</Label>
+                            <Textarea
+                              placeholder="What's slowing you down right now?"
+                              value={importExtras.blockers}
+                              onChange={(e) => setImportExtras({ ...importExtras, blockers: e.target.value })}
+                              className="rounded-none border-2 border-foreground bg-white font-mono text-sm focus-visible:ring-0 focus-visible:border-foreground resize-none"
+                              rows={3}
+                            />
+                          </div>
+                          <div className="grid gap-2">
+                            <Label className="font-mono text-xs uppercase tracking-[0.2em] text-foreground/60">Target User</Label>
+                            <Input
+                              placeholder="e.g. indie hackers, students"
+                              value={importExtras.targetUser}
+                              onChange={(e) => setImportExtras({ ...importExtras, targetUser: e.target.value })}
+                              className="rounded-none border-2 border-foreground bg-white font-mono text-sm focus-visible:ring-0 focus-visible:border-foreground"
+                            />
+                          </div>
+                          <Button
+                            onClick={handleImportRepo}
+                            disabled={importingRepo !== null}
+                            className="w-full rounded-none border-2 border-foreground bg-foreground text-background font-mono text-xs uppercase tracking-[0.2em] paper-btn-dark"
+                          >
+                            {importingRepo ? <RefreshCw className="w-3.5 h-3.5 animate-spin mr-2" /> : null}
+                            Import Project
+                          </Button>
+                        </div>
+                      ) : (
+                        /* Step 1 — pick a repo */
+                        <>
+                          {reposLoading && (
+                            <div className="flex items-center justify-center py-12 gap-2 font-mono text-xs text-foreground/50">
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              Loading repos…
+                            </div>
+                          )}
+                          {reposError && (
+                            <div className="border-2 border-red-400 bg-red-50 px-4 py-3 font-mono text-xs text-red-700">
+                              {reposError.includes('No GitHub token')
+                                ? 'Connect your GitHub account to import repos.'
+                                : reposError}
+                            </div>
+                          )}
+                          {!reposLoading && !reposError && repos.length === 0 && (
+                            <p className="py-8 text-center font-mono text-xs text-foreground/40">No repos found.</p>
+                          )}
+                          {!reposLoading && repos.length > 0 && (
+                            <div className="relative mb-3">
+                              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 text-foreground/40" />
+                              <input
+                                type="text"
+                                placeholder="Search repos..."
+                                value={repoSearch}
+                                onChange={(e) => setRepoSearch(e.target.value)}
+                                className="w-full pl-8 pr-4 py-2.5 font-mono text-[11px] border-2 border-foreground/20 bg-transparent text-foreground placeholder:text-foreground/30 focus:border-foreground focus:outline-none transition-colors"
+                              />
+                            </div>
+                          )}
+                          {!reposLoading && repos.length > 0 && (
+                            <div className="max-h-72 overflow-y-auto border-2 border-foreground divide-y-2 divide-foreground">
+                              {repos.filter((r) => {
+                                const q = repoSearch.trim().toLowerCase();
+                                return !q || r.name.toLowerCase().includes(q) || r.description?.toLowerCase().includes(q);
+                              }).map((repo) => (
+                                <button
+                                  key={repo.id}
+                                  onClick={() => setSelectedRepo(repo)}
+                                  className="flex items-center justify-between gap-3 bg-white px-4 py-3 text-left hover:bg-foreground hover:text-background transition-colors group"
+                                  style={{ width: '100%', minWidth: 0 }}
+                                >
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <p className="font-mono text-xs font-bold truncate">{repo.name}</p>
+                                      {repo.language && (
+                                        <span className="shrink-0 border border-foreground/25 group-hover:border-background/30 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider">
+                                          {repo.language}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {repo.description && (
+                                      <p className="font-mono text-[10px] text-foreground/50 group-hover:text-background/60 truncate mt-0.5">
+                                        {repo.description}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <ArrowUpRight className="w-3.5 h-3.5 shrink-0 text-foreground/30 group-hover:text-background" />
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid gap-4 py-4">
+                        <div className="grid gap-2">
+                          <Label htmlFor="name" className="font-mono text-xs uppercase tracking-[0.2em] text-foreground/60">
+                            Project Name
+                          </Label>
+                          <Input
+                            id="name"
+                            placeholder="e.g. Linna, My SaaS App"
+                            value={newProject.name}
+                            onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
+                            className="rounded-none border-2 border-foreground bg-white font-mono text-sm focus-visible:ring-0 focus-visible:border-foreground"
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="description" className="font-mono text-xs uppercase tracking-[0.2em] text-foreground/60">
+                            Description
+                          </Label>
+                          <Input
+                            id="description"
+                            placeholder="One line — what are you building?"
+                            value={newProject.description}
+                            onChange={(e) => setNewProject({ ...newProject, description: e.target.value })}
+                            className="rounded-none border-2 border-foreground bg-white font-mono text-sm focus-visible:ring-0 focus-visible:border-foreground"
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="tech" className="font-mono text-xs uppercase tracking-[0.2em] text-foreground/60">
+                            Tech Stack
+                          </Label>
+                          <div
+                            className="flex min-h-10 w-full cursor-text flex-wrap items-center gap-1.5 border-2 border-foreground bg-white px-2 py-1.5 text-sm focus-within:outline-none"
+                            onClick={() => document.getElementById('tech')?.focus()}
+                          >
+                            {techTags.map((tag, index) => (
+                              <span
+                                key={index}
+                                className="inline-flex shrink-0 items-center gap-1 border border-foreground/30 bg-yellow-100 px-2 py-0.5 font-mono text-[11px] text-foreground select-none"
+                              >
+                                {tag}
+                                <button
+                                  type="button"
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    setTechTags((prev) => prev.filter((_, i) => i !== index));
+                                  }}
+                                  className="flex h-3.5 w-3.5 items-center justify-center text-[10px] leading-none text-foreground/40 hover:text-foreground transition-colors"
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                            <input
+                              id="tech"
+                              type="text"
+                              autoComplete="off"
+                              placeholder={techTags.length === 0 ? 'e.g. Next.js, Supabase' : ''}
+                              value={techInput}
+                              onChange={(e) => setTechInput(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === ' ' && techInput.trim()) {
+                                  e.preventDefault();
+                                  setTechTags((prev) => [...prev, techInput.trim()]);
+                                  setTechInput('');
+                                } else if (e.key === 'Backspace' && techInput === '' && techTags.length > 0) {
+                                  setTechTags((prev) => prev.slice(0, -1));
+                                } else if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  if (techInput.trim()) {
+                                    setTechTags((prev) => [...prev, techInput.trim()]);
+                                    setTechInput('');
+                                  }
+                                }
+                              }}
+                              className="min-w-[120px] flex-1 border-0 bg-transparent py-0.5 font-mono text-sm focus:outline-none focus:ring-0 placeholder:text-foreground/30"
+                            />
+                          </div>
+                          <p className="font-mono text-[10px] text-foreground/35 uppercase tracking-[0.2em]">
+                            Space or Enter to add · Backspace to remove
+                          </p>
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="goals" className="font-mono text-xs uppercase tracking-[0.2em] text-foreground/60">
+                            Current Goals
+                          </Label>
+                          <Textarea
+                            id="goals"
+                            placeholder="What are you trying to accomplish this week?"
+                            value={newProject.goals}
+                            onChange={(e) => setNewProject({ ...newProject, goals: e.target.value })}
+                            className="rounded-none border-2 border-foreground bg-white font-mono text-sm focus-visible:ring-0 focus-visible:border-foreground"
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="blockers" className="font-mono text-xs uppercase tracking-[0.2em] text-foreground/60">
+                            Known Blockers
+                          </Label>
+                          <Textarea
+                            id="blockers"
+                            placeholder="What's slowing you down right now?"
+                            value={newProject.blockers}
+                            onChange={(e) => setNewProject({ ...newProject, blockers: e.target.value })}
+                            className="rounded-none border-2 border-foreground bg-white font-mono text-sm focus-visible:ring-0 focus-visible:border-foreground"
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="target" className="font-mono text-xs uppercase tracking-[0.2em] text-foreground/60">
+                            Target User
+                          </Label>
+                          <Input
+                            id="target"
+                            placeholder="e.g. indie hackers, students"
+                            value={newProject.targetUser}
+                            onChange={(e) => setNewProject({ ...newProject, targetUser: e.target.value })}
+                            className="rounded-none border-2 border-foreground bg-white font-mono text-sm focus-visible:ring-0 focus-visible:border-foreground"
+                          />
+                        </div>
                       </div>
-                      <p className="font-mono text-[10px] text-foreground/35 uppercase tracking-[0.2em]">
-                        Space or Enter to add · Backspace to remove
-                      </p>
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="goals" className="font-mono text-xs uppercase tracking-[0.2em] text-foreground/60">
-                        Current Goals
-                      </Label>
-                      <Textarea
-                        id="goals"
-                        placeholder="What are you trying to accomplish this week?"
-                        value={newProject.goals}
-                        onChange={(e) => setNewProject({ ...newProject, goals: e.target.value })}
-                        className="rounded-none border-2 border-foreground bg-white font-mono text-sm focus-visible:ring-0 focus-visible:border-foreground"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="blockers" className="font-mono text-xs uppercase tracking-[0.2em] text-foreground/60">
-                        Known Blockers
-                      </Label>
-                      <Textarea
-                        id="blockers"
-                        placeholder="What's slowing you down right now?"
-                        value={newProject.blockers}
-                        onChange={(e) => setNewProject({ ...newProject, blockers: e.target.value })}
-                        className="rounded-none border-2 border-foreground bg-white font-mono text-sm focus-visible:ring-0 focus-visible:border-foreground"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="target" className="font-mono text-xs uppercase tracking-[0.2em] text-foreground/60">
-                        Target User
-                      </Label>
-                      <Input
-                        id="target"
-                        placeholder="e.g. indie hackers, students"
-                        value={newProject.targetUser}
-                        onChange={(e) => setNewProject({ ...newProject, targetUser: e.target.value })}
-                        className="rounded-none border-2 border-foreground bg-white font-mono text-sm focus-visible:ring-0 focus-visible:border-foreground"
-                      />
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button
-                      onClick={handleCreateProject}
-                      className="w-full rounded-none border-2 border-foreground bg-foreground font-mono text-sm uppercase tracking-[0.2em] text-background paper-btn-dark"
-                    >
-                      {editingProjectId ? 'Save Changes' : 'Create Project'}
-                    </Button>
-                  </DialogFooter>
+                      <DialogFooter>
+                        <Button
+                          onClick={handleCreateProject}
+                          className="w-full rounded-none border-2 border-foreground bg-foreground font-mono text-sm uppercase tracking-[0.2em] text-background paper-btn-dark"
+                        >
+                          {editingProjectId ? 'Save Changes' : 'Create Project'}
+                        </Button>
+                      </DialogFooter>
+                    </>
+                  )}
                 </DialogContent>
               </Dialog>
             </div>
@@ -337,7 +629,7 @@ export default function Dashboard() {
                   Create your first project to give your AI assistant a persistent memory for goals, stack, and blockers.
                 </p>
                 <button
-                  onClick={() => setIsModalOpen(true)}
+                  onClick={openNewProject}
                   className="border-2 border-foreground bg-foreground text-background px-6 py-3 font-mono text-sm uppercase tracking-[0.2em] paper-btn-dark w-full"
                 >
                   + New project
@@ -480,6 +772,16 @@ export default function Dashboard() {
                             <Edit2 className="mr-2 h-3 w-3" />
                             Edit
                           </DropdownMenuItem>
+                          {project.githubOwner && project.githubRepoName && (
+                            <DropdownMenuItem
+                              onClick={() => handleSync(project)}
+                              disabled={syncingProjectId === project.id}
+                              className="rounded-none font-mono text-xs uppercase tracking-[0.15em] focus:bg-foreground focus:text-background"
+                            >
+                              <RefreshCw className={`mr-2 h-3 w-3 ${syncingProjectId === project.id ? 'animate-spin' : ''}`} />
+                              Sync GitHub
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem
                             onClick={() => handleDelete(project.id)}
                             className="rounded-none font-mono text-xs uppercase tracking-[0.15em] text-red-600 focus:bg-red-600 focus:text-white"
@@ -495,15 +797,27 @@ export default function Dashboard() {
               })}
 
               {/* "Add new" ghost card */}
-              <button
-                onClick={() => setIsModalOpen(true)}
-                className="border-2 border-dashed border-foreground/30 bg-transparent min-h-[180px] flex flex-col items-center justify-center gap-3 text-foreground/30 hover:border-foreground hover:text-foreground transition-colors duration-150 group"
-              >
-                <div className="w-10 h-10 border-2 border-dashed border-foreground/30 group-hover:border-foreground group-hover:bg-foreground group-hover:text-background flex items-center justify-center transition-colors duration-150">
-                  <Plus className="h-5 w-5" />
-                </div>
-                <span className="font-mono text-xs uppercase tracking-[0.2em]">New project</span>
-              </button>
+              {planInfo.plan === 'free' && projects.length >= 1 ? (
+                <button
+                  onClick={() => setShowUpgradePrompt(true)}
+                  className="border-2 border-dashed border-yellow-400 bg-yellow-50 min-h-[180px] flex flex-col items-center justify-center gap-3 text-foreground/50 hover:bg-yellow-100 transition-colors duration-150 group"
+                >
+                  <div className="w-10 h-10 border-2 border-yellow-400 bg-yellow-300 flex items-center justify-center">
+                    <Zap className="h-5 w-5 text-foreground" />
+                  </div>
+                  <span className="font-mono text-xs uppercase tracking-[0.2em] text-foreground/60">Upgrade for more</span>
+                </button>
+              ) : (
+                <button
+                  onClick={openNewProject}
+                  className="border-2 border-dashed border-foreground/30 bg-transparent min-h-[180px] flex flex-col items-center justify-center gap-3 text-foreground/30 hover:border-foreground hover:text-foreground transition-colors duration-150 group"
+                >
+                  <div className="w-10 h-10 border-2 border-dashed border-foreground/30 group-hover:border-foreground group-hover:bg-foreground group-hover:text-background flex items-center justify-center transition-colors duration-150">
+                    <Plus className="h-5 w-5" />
+                  </div>
+                  <span className="font-mono text-xs uppercase tracking-[0.2em]">New project</span>
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -519,6 +833,40 @@ export default function Dashboard() {
             <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-foreground/20">
               Linna Workspace
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Upgrade prompt dialog */}
+      {showUpgradePrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40">
+          <div className="mx-4 w-full max-w-sm border-2 border-foreground bg-paper paper-shadow-lg">
+            <div className="border-b-2 border-foreground px-6 py-5">
+              <div className="flex items-center gap-2.5 mb-1">
+                <div className="w-7 h-7 bg-yellow-300 border-2 border-foreground flex items-center justify-center shrink-0">
+                  <Zap className="w-3.5 h-3.5" />
+                </div>
+                <h2 className="font-headline text-xl font-black">Project limit reached</h2>
+              </div>
+              <p className="font-mono text-xs text-foreground/60 leading-5">
+                Free plan includes 1 project. Upgrade to Pro for unlimited projects, unlimited messages, and full history.
+              </p>
+            </div>
+            <div className="px-6 py-5 space-y-3">
+              <Link
+                href="/pricing"
+                className="flex items-center justify-center gap-2 w-full border-2 border-foreground bg-foreground text-background px-5 py-3 font-mono text-xs uppercase tracking-[0.2em] paper-btn-dark hover:bg-background hover:text-foreground transition-colors"
+              >
+                Upgrade to Pro — $12/mo
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+              <button
+                onClick={() => setShowUpgradePrompt(false)}
+                className="w-full border-2 border-foreground/30 bg-transparent text-foreground/60 px-5 py-3 font-mono text-xs uppercase tracking-[0.2em] hover:border-foreground hover:text-foreground transition-colors"
+              >
+                Maybe later
+              </button>
+            </div>
           </div>
         </div>
       )}

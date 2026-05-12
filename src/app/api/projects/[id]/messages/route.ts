@@ -46,6 +46,34 @@ export async function POST(request: Request, context: RouteContext) {
     return NextResponse.json({ error: 'Message content and role are required.' }, { status: 400 });
   }
 
+  // Enforce free plan monthly message limit (only count user-sent messages)
+  if (body.role === 'user') {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('plan')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if ((profile?.plan ?? 'free') === 'free') {
+      const startOfMonth = new Date();
+      startOfMonth.setUTCDate(1);
+      startOfMonth.setUTCHours(0, 0, 0, 0);
+
+      const { count } = await supabase
+        .from('messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('role', 'user')
+        .gte('created_at', startOfMonth.toISOString());
+
+      if ((count ?? 0) >= 20) {
+        return NextResponse.json(
+          { error: 'You have reached the 20 messages/month limit on the free plan. Upgrade to Pro for unlimited messages.', code: 'MESSAGE_LIMIT' },
+          { status: 403 },
+        );
+      }
+    }
+  }
+
   const { data, error } = await supabase
     .from('messages')
     .insert({

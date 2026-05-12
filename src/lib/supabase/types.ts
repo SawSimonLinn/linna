@@ -35,6 +35,39 @@ export type Database = {
           },
         ];
       };
+      profiles: {
+        Row: {
+          id: string;
+          github_token: string | null;
+          plan: 'free' | 'pro';
+          stripe_customer_id: string | null;
+          stripe_subscription_id: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          github_token?: string | null;
+          plan?: 'free' | 'pro';
+          stripe_customer_id?: string | null;
+          stripe_subscription_id?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          github_token?: string | null;
+          plan?: 'free' | 'pro';
+          stripe_customer_id?: string | null;
+          stripe_subscription_id?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      stripe_events: {
+        Row: { event_id: string; created_at: string };
+        Insert: { event_id: string; created_at?: string };
+        Update: { event_id?: string; created_at?: string };
+        Relationships: [];
+      };
       projects: {
         Row: {
           blockers: string;
@@ -52,6 +85,11 @@ export type Database = {
           task_count: number;
           tech_stack: string;
           user_id: string;
+          github_repo_url: string | null;
+          github_repo_name: string | null;
+          github_owner: string | null;
+          readme: string | null;
+          last_synced_at: string | null;
         };
         Insert: {
           blockers?: string;
@@ -69,6 +107,11 @@ export type Database = {
           task_count?: number;
           tech_stack?: string;
           user_id: string;
+          github_repo_url?: string | null;
+          github_repo_name?: string | null;
+          github_owner?: string | null;
+          readme?: string | null;
+          last_synced_at?: string | null;
         };
         Update: {
           blockers?: string;
@@ -86,6 +129,11 @@ export type Database = {
           task_count?: number;
           tech_stack?: string;
           user_id?: string;
+          github_repo_url?: string | null;
+          github_repo_name?: string | null;
+          github_owner?: string | null;
+          readme?: string | null;
+          last_synced_at?: string | null;
         };
         Relationships: [];
       };

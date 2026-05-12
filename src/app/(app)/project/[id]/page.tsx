@@ -16,6 +16,7 @@ import {
   Circle,
   Copy,
   Edit3,
+  GitBranch,
   History,
   MessageSquareText,
   Plus,
@@ -28,6 +29,7 @@ import {
 } from 'lucide-react';
 import { contextAwareChat } from '@/ai/flows/context-aware-chat-flow';
 import { extractNextAction } from '@/ai/flows/extract-next-action-flow';
+import { generateCodexPrompt } from '@/ai/flows/generate-codex-prompt-flow';
 import type { Message, NewProjectInput, Project, Task } from '@/lib/projects/types';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
@@ -40,6 +42,16 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   Dialog,
   DialogContent,
@@ -63,6 +75,11 @@ export default function ProjectChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
+  const [pendingUndo, setPendingUndo] = useState<{
+    message: Message;
+    timerId: ReturnType<typeof setTimeout>;
+  } | null>(null);
 
   const [isSessionHistoryOpen, setIsSessionHistoryOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -83,6 +100,54 @@ export default function ProjectChatPage() {
   const [taskInput, setTaskInput] = useState('');
   const [isGeneratingTasks, setIsGeneratingTasks] = useState(false);
   const [mvpScopeInput, setMvpScopeInput] = useState('');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
+  const [inlinePrompt, setInlinePrompt] = useState<string | null>(null);
+  const [messageLimitReached, setMessageLimitReached] = useState(false);
+  const [promptCopied, setPromptCopied] = useState(false);
+
+  const lastAssistantMessage = [...messages].reverse().find((m) => m.role === 'assistant');
+
+  const handleGeneratePrompt = async () => {
+    if (!project || !lastAssistantMessage) return;
+    setIsGeneratingPrompt(true);
+    setInlinePrompt(null);
+    try {
+      const result = await generateCodexPrompt({
+        projectName: project.name,
+        projectDescription: project.description,
+        techStack: project.techStack,
+        goals: project.goals,
+        blockers: project.blockers,
+        targetUser: project.targetUser,
+        lastAssistantMessage: lastAssistantMessage.content,
+      });
+      setInlinePrompt(result.prompt);
+    } catch {
+      setInlinePrompt('Failed to generate prompt. Please try again.');
+    } finally {
+      setIsGeneratingPrompt(false);
+    }
+  };
+
+  const handleCopyPrompt = () => {
+    if (!inlinePrompt) return;
+    void navigator.clipboard.writeText(inlinePrompt).then(() => {
+      setPromptCopied(true);
+      setTimeout(() => setPromptCopied(false), 2000);
+    });
+  };
+
+  const handleSync = async () => {
+    if (!project) return;
+    setIsSyncing(true);
+    const res = await fetch(`/api/projects/${project.id}/sync`, { method: 'POST' });
+    if (res.ok) {
+      const updated = (await res.json()) as Project;
+      setProject(updated);
+    }
+    setIsSyncing(false);
+  };
 
   useEffect(() => {
     const loadProject = async () => {
@@ -195,6 +260,7 @@ export default function ProjectChatPage() {
 
     const userText = combined;
     setInput('');
+    setInlinePrompt(null);
     setIsLoading(true);
 
     try {
@@ -204,7 +270,18 @@ export default function ProjectChatPage() {
         body: JSON.stringify({ role: 'user', content: userText }),
       });
 
-      if (!userMessageResponse.ok) throw new Error('Failed to save the user message.');
+      if (!userMessageResponse.ok) {
+        if (userMessageResponse.status === 403) {
+          const errData = (await userMessageResponse.json()) as { code?: string };
+          if (errData.code === 'MESSAGE_LIMIT') {
+            setMessageLimitReached(true);
+            setIsLoading(false);
+            setInput(userText);
+            return;
+          }
+        }
+        throw new Error('Failed to save the user message.');
+      }
 
       const userMsg = (await userMessageResponse.json()) as Message;
       setMessages((prev) => [...prev, userMsg]);
@@ -276,11 +353,43 @@ export default function ProjectChatPage() {
     });
   };
 
-  const handleDeleteMessage = async (messageId: string) => {
-    const res = await fetch(`/api/projects/${id}/messages/${messageId}`, { method: 'DELETE' });
-    if (res.ok) {
-      setMessages((prev) => prev.filter((m) => m.id !== messageId));
+  const handleDeleteMessage = (messageId: string) => {
+    setDeletingMessageId(messageId);
+  };
+
+  const handleConfirmDelete = () => {
+    const messageId = deletingMessageId;
+    if (!messageId) return;
+    setDeletingMessageId(null);
+
+    const message = messages.find((m) => m.id === messageId);
+    if (!message) return;
+
+    if (pendingUndo) {
+      clearTimeout(pendingUndo.timerId);
+      void fetch(`/api/projects/${id}/messages/${pendingUndo.message.id}`, { method: 'DELETE' });
     }
+
+    setMessages((prev) => prev.filter((m) => m.id !== messageId));
+
+    const timerId = setTimeout(() => {
+      void fetch(`/api/projects/${id}/messages/${messageId}`, { method: 'DELETE' });
+      setPendingUndo(null);
+    }, 5000);
+
+    setPendingUndo({ message, timerId });
+  };
+
+  const handleUndoDelete = () => {
+    if (!pendingUndo) return;
+    clearTimeout(pendingUndo.timerId);
+    const restored = pendingUndo.message;
+    setMessages((prev) => {
+      const insertIndex = prev.findIndex((m) => m.createdAt > restored.createdAt);
+      if (insertIndex === -1) return [...prev, restored];
+      return [...prev.slice(0, insertIndex), restored, ...prev.slice(insertIndex)];
+    });
+    setPendingUndo(null);
   };
 
   const handleQuickChip = (text: string) => {
@@ -513,6 +622,24 @@ export default function ProjectChatPage() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
+                  {project.githubOwner && project.githubRepoName && (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={handleSync}
+                        disabled={isSyncing}
+                        className="h-9 rounded-none border-2 border-black bg-background font-mono text-xs uppercase tracking-[0.15em] text-black hover:bg-black hover:text-white transition-colors disabled:opacity-50"
+                      >
+                        <GitBranch className={`mr-2 h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                        {isSyncing ? 'Syncing…' : 'Sync GitHub'}
+                      </Button>
+                      {project.lastSyncedAt && (
+                        <span className="font-mono text-[10px] text-black/40 uppercase tracking-[0.15em]">
+                          {formatDistanceToNow(new Date(project.lastSyncedAt), { addSuffix: true })}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   <Button
                     variant="outline"
                     onClick={() => setIsSessionHistoryOpen(true)}
@@ -706,7 +833,7 @@ export default function ProjectChatPage() {
                                 )}
                               </button>
                               <button
-                                onClick={() => void handleDeleteMessage(message.id)}
+                                onClick={() => handleDeleteMessage(message.id)}
                                 className="flex h-5 w-5 items-center justify-center text-black/20 transition-colors hover:text-red-500"
                                 title="Delete"
                               >
@@ -717,6 +844,53 @@ export default function ProjectChatPage() {
                         </div>
                       </article>
                     ))}
+
+                    {isGeneratingPrompt ? (
+                      <div className="flex justify-start">
+                        <div className="max-w-[85%] md:max-w-[78%] space-y-1.5">
+                          <div className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.2em] text-black/30">
+                            <Sparkles className="h-3 w-3" />
+                            Prompt
+                          </div>
+                          <div className="border-2 border-dashed border-black/30 bg-background p-4 flex items-center gap-2">
+                            <div className="h-1.5 w-1.5 animate-bounce bg-black [animation-delay:-0.3s]" />
+                            <div className="h-1.5 w-1.5 animate-bounce bg-black [animation-delay:-0.15s]" />
+                            <div className="h-1.5 w-1.5 animate-bounce bg-black" />
+                          </div>
+                        </div>
+                      </div>
+                    ) : inlinePrompt ? (
+                      <div className="flex justify-start">
+                        <div className="max-w-[85%] md:max-w-[78%] space-y-1.5">
+                          <div className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.2em] text-black/30">
+                            <Sparkles className="h-3 w-3" />
+                            Prompt
+                          </div>
+                          <div className="border-2 border-dashed border-black bg-[#f6f8fa] p-4">
+                            <pre className="whitespace-pre-wrap font-mono text-[12px] leading-6 text-black">{inlinePrompt}</pre>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={handleCopyPrompt}
+                              className="flex items-center gap-1.5 border border-black/20 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.15em] text-black/50 transition-colors hover:border-black hover:text-black"
+                            >
+                              {promptCopied ? (
+                                <><Check className="h-3 w-3" />Copied</>
+                              ) : (
+                                <><Copy className="h-3 w-3" />Copy Prompt</>
+                              )}
+                            </button>
+                            <button
+                              onClick={() => setInlinePrompt(null)}
+                              className="flex h-5 w-5 items-center justify-center text-black/20 transition-colors hover:text-black/60"
+                              title="Dismiss"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
 
                     {isLoading ? (
                       <div className="flex justify-start">
@@ -734,34 +908,86 @@ export default function ProjectChatPage() {
               </div>
             </ScrollArea>
 
+            {/* Undo banner */}
+            {pendingUndo ? (
+              <div className="flex items-center justify-between border-t-2 border-black bg-yellow-50 px-6 py-2">
+                <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-black/60">
+                  Message deleted
+                </span>
+                <button
+                  onClick={handleUndoDelete}
+                  className="font-mono text-[10px] uppercase tracking-[0.2em] text-black underline underline-offset-2 hover:no-underline transition-all"
+                >
+                  Undo
+                </button>
+              </div>
+            ) : null}
+
             {/* Input bar */}
             <div className="border-t-2 border-black bg-paper px-6 py-4">
               <div className="mx-auto w-full max-w-3xl">
-                <div className="flex items-end gap-0 border-2 border-black bg-background">
-                  <textarea
-                    rows={1}
-                    placeholder="Message Linna about this project..."
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        void handleSend();
-                      }
-                    }}
-                    className="min-h-[52px] flex-1 resize-none border-0 bg-transparent px-4 py-3.5 font-mono text-sm leading-6 placeholder:text-black/30 focus:outline-none focus:ring-0"
-                  />
-                  <Button
-                    onClick={() => void handleSend()}
-                    disabled={!input.trim() || isLoading}
-                    className="h-[52px] w-[52px] rounded-none border-0 border-l-2 border-black bg-black p-0 text-white hover:bg-background hover:text-black disabled:opacity-30 transition-colors"
-                  >
-                    <Send className="h-4 w-4" />
-                  </Button>
-                </div>
-                <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.2em] text-black/25">
-                  Enter to send · Shift+Enter for new line
-                </p>
+                {lastAssistantMessage && !isLoading ? (
+                  <div className="mb-3 flex justify-end">
+                    <button
+                      onClick={() => void handleGeneratePrompt()}
+                      disabled={isGeneratingPrompt}
+                      className="flex items-center gap-1.5 border-2 border-black bg-background px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.2em] text-black hover:bg-black hover:text-white transition-colors disabled:opacity-50"
+                    >
+                      <Sparkles className="h-3 w-3" />
+                      {isGeneratingPrompt ? 'Creating…' : 'Create Prompt'}
+                    </button>
+                  </div>
+                ) : null}
+                {messageLimitReached ? (
+                  <div className="border-2 border-yellow-400 bg-yellow-50 px-4 py-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-6 h-6 bg-yellow-300 border-2 border-foreground flex items-center justify-center shrink-0 mt-0.5">
+                        <AlertCircle className="w-3 h-3" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-mono text-xs font-bold text-foreground mb-1">Monthly limit reached</p>
+                        <p className="font-mono text-[11px] text-foreground/60 leading-5 mb-3">
+                          Free plan allows 20 messages per month. Upgrade to Pro for unlimited messages.
+                        </p>
+                        <Link
+                          href="/pricing"
+                          className="inline-flex items-center gap-1.5 border-2 border-foreground bg-foreground text-background px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.2em] hover:bg-background hover:text-foreground transition-colors"
+                        >
+                          Upgrade to Pro
+                          <ArrowRight className="w-3 h-3" />
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-end gap-0 border-2 border-black bg-background">
+                      <textarea
+                        rows={1}
+                        placeholder="Message Linna about this project..."
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            void handleSend();
+                          }
+                        }}
+                        className="min-h-[52px] flex-1 resize-none border-0 bg-transparent px-4 py-3.5 font-mono text-sm leading-6 placeholder:text-black/30 focus:outline-none focus:ring-0"
+                      />
+                      <Button
+                        onClick={() => void handleSend()}
+                        disabled={!input.trim() || isLoading}
+                        className="h-[52px] w-[52px] rounded-none border-0 border-l-2 border-black bg-black p-0 text-white hover:bg-background hover:text-black disabled:opacity-30 transition-colors"
+                      >
+                        <Send className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.2em] text-black/25">
+                      Enter to send · Shift+Enter for new line
+                    </p>
+                  </>
+                )}
               </div>
             </div>
           </section>
@@ -1059,6 +1285,31 @@ export default function ProjectChatPage() {
           </ScrollArea>
         </SheetContent>
       </Sheet>
+
+      {/* Delete message confirm */}
+      <AlertDialog open={deletingMessageId !== null} onOpenChange={(open) => { if (!open) setDeletingMessageId(null); }}>
+        <AlertDialogContent className="rounded-none border-2 border-black bg-paper shadow-[4px_4px_0px_#000]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-mono text-xs uppercase tracking-[0.3em] text-black">
+              Delete message?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="font-mono text-xs text-black/50">
+              You can undo this for 5 seconds after confirming.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-none border-2 border-black bg-background font-mono text-xs uppercase tracking-[0.15em] text-black hover:bg-black hover:text-white transition-colors">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="rounded-none border-2 border-black bg-black font-mono text-xs uppercase tracking-[0.15em] text-white hover:bg-background hover:text-black transition-colors"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Edit dialog */}
       <Dialog
