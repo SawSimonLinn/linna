@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { userHasGitHubProvider } from '@/lib/auth/providers'
 
 export async function GET() {
   const supabase = await createSupabaseServerClient()
@@ -13,9 +14,9 @@ export async function GET() {
     .from('profiles')
     .select('github_token')
     .eq('id', user.id)
-    .single()
+    .maybeSingle()
 
-  if (!profile?.github_token) {
+  if (!profile?.github_token || !userHasGitHubProvider(user)) {
     return NextResponse.json({ error: 'No GitHub token. Sign in with GitHub first.' }, { status: 403 })
   }
 

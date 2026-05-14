@@ -8,6 +8,7 @@ export type Database = {
           content: string;
           created_at: string;
           id: string;
+          pinned: boolean;
           project_id: string;
           role: 'user' | 'assistant';
         };
@@ -15,6 +16,7 @@ export type Database = {
           content: string;
           created_at?: string;
           id?: string;
+          pinned?: boolean;
           project_id: string;
           role: 'user' | 'assistant';
         };
@@ -22,6 +24,7 @@ export type Database = {
           content?: string;
           created_at?: string;
           id?: string;
+          pinned?: boolean;
           project_id?: string;
           role?: 'user' | 'assistant';
         };
@@ -68,6 +71,79 @@ export type Database = {
         Update: { event_id?: string; created_at?: string };
         Relationships: [];
       };
+      project_members: {
+        Row: {
+          id: string;
+          project_id: string;
+          user_id: string;
+          role: 'owner' | 'member';
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          user_id: string;
+          role?: 'owner' | 'member';
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          project_id?: string;
+          user_id?: string;
+          role?: 'owner' | 'member';
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'project_members_project_id_fkey';
+            columns: ['project_id'];
+            isOneToOne: false;
+            referencedRelation: 'projects';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      project_invitations: {
+        Row: {
+          id: string;
+          project_id: string;
+          invited_email: string;
+          invited_by: string;
+          token: string;
+          accepted_at: string | null;
+          created_at: string;
+          expires_at: string;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          invited_email: string;
+          invited_by: string;
+          token?: string;
+          accepted_at?: string | null;
+          created_at?: string;
+          expires_at?: string;
+        };
+        Update: {
+          id?: string;
+          project_id?: string;
+          invited_email?: string;
+          invited_by?: string;
+          token?: string;
+          accepted_at?: string | null;
+          created_at?: string;
+          expires_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'project_invitations_project_id_fkey';
+            columns: ['project_id'];
+            isOneToOne: false;
+            referencedRelation: 'projects';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       projects: {
         Row: {
           blockers: string;
@@ -90,6 +166,7 @@ export type Database = {
           github_owner: string | null;
           readme: string | null;
           last_synced_at: string | null;
+          launch_content: Json | null;
         };
         Insert: {
           blockers?: string;
@@ -112,6 +189,7 @@ export type Database = {
           github_owner?: string | null;
           readme?: string | null;
           last_synced_at?: string | null;
+          launch_content?: Json | null;
         };
         Update: {
           blockers?: string;
@@ -134,6 +212,7 @@ export type Database = {
           github_owner?: string | null;
           readme?: string | null;
           last_synced_at?: string | null;
+          launch_content?: Json | null;
         };
         Relationships: [];
       };

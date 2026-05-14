@@ -9,12 +9,6 @@ const nextConfig: NextConfig = {
     '@genkit-ai/google-genai',
     '@opentelemetry/sdk-node',
   ],
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   images: {
     remotePatterns: [
       {

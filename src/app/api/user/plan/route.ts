@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { userHasGitHubProvider } from '@/lib/auth/providers';
 
 export async function GET() {
   const supabase = await createSupabaseServerClient();
@@ -14,8 +15,8 @@ export async function GET() {
   startOfMonth.setUTCHours(0, 0, 0, 0);
 
   const [profileResult, projectCountResult, messageCountResult] = await Promise.all([
-    supabase.from('profiles').select('plan, stripe_customer_id, stripe_subscription_id').eq('id', user.id).maybeSingle(),
-    supabase.from('projects').select('id', { count: 'exact', head: true }),
+    supabase.from('profiles').select('plan, github_token, stripe_customer_id, stripe_subscription_id').eq('id', user.id).maybeSingle(),
+    supabase.from('projects').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
     supabase.from('messages').select('id', { count: 'exact', head: true }).eq('role', 'user').gte('created_at', startOfMonth.toISOString()),
   ]);
 
@@ -23,6 +24,7 @@ export async function GET() {
   const projectCount = projectCountResult.count ?? 0;
   const monthlyMessageCount = messageCountResult.count ?? 0;
   const hasStripeCustomer = !!profileResult.data?.stripe_customer_id;
+  const hasGitHubToken = !!profileResult.data?.github_token && userHasGitHubProvider(user);
 
-  return NextResponse.json({ plan, projectCount, monthlyMessageCount, hasStripeCustomer });
+  return NextResponse.json({ plan, projectCount, monthlyMessageCount, hasStripeCustomer, hasGitHubToken });
 }

@@ -23,9 +23,10 @@ export async function PATCH(request: Request, context: RouteContext) {
     .eq('id', taskId)
     .eq('project_id', id)
     .select('*')
-    .single();
+    .maybeSingle();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!data) return NextResponse.json({ error: 'Task not found.' }, { status: 404 });
 
   const { data: allTasks } = await supabase
     .from('tasks')

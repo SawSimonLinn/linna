@@ -27,7 +27,7 @@ function GithubIcon({ className }: { className?: string }) {
 }
 
 const features = [
-  { icon: <Zap className="w-4 h-4" />, text: 'Project memory that never forgets your stack' },
+  { icon: <Zap className="w-4 h-4" />, text: 'Project memory for your stack, goals, blockers, decisions, and chat history' },
   { icon: <MessageSquare className="w-4 h-4" />, text: 'Context-aware answers grounded in your project' },
   { icon: <History className="w-4 h-4" />, text: 'Every session picks up exactly where you left off' },
 ]
@@ -123,7 +123,7 @@ export default function SignInPage() {
           </h2>
 
           <p className="text-background/60 text-sm leading-relaxed mb-10 max-w-sm">
-            Stop re-explaining your stack every session. Linna remembers your tech, goals, and decisions — so you can focus on building.
+            Stop re-explaining your project every session. Linna remembers your stack, goals, blockers, decisions, and chat history so you can focus on building.
           </p>
 
           <ul className="space-y-4">
@@ -141,7 +141,7 @@ export default function SignInPage() {
         {/* Testimonial */}
         <div className="z-10 border-2 border-background/20 bg-background/5 p-6 mt-12">
           <p className="text-sm text-background/75 leading-relaxed mb-4 italic">
-            &ldquo;Linna is the first AI tool that actually understands my project. I stopped explaining my stack from scratch — it just knows.&rdquo;
+            &ldquo;Linna keeps my project context together. I stopped explaining my stack, blockers, and decisions from scratch.&rdquo;
           </p>
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-yellow-300 border-2 border-background/20 flex items-center justify-center font-bold text-foreground text-xs">
@@ -176,20 +176,25 @@ export default function SignInPage() {
           {/* OAuth buttons */}
           <div className="flex flex-col gap-3 mb-6">
             <button
+              onClick={handleGitHub}
+              disabled={githubLoading || googleLoading || loading}
+              className="grid w-full grid-cols-[1fr_auto] items-center gap-3 border-2 border-foreground bg-white px-3 py-3 font-mono text-xs uppercase tracking-[0.15em] paper-btn hover:bg-foreground/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span className="flex min-w-0 items-center justify-center gap-3">
+                <GithubIcon className="w-4 h-4 shrink-0" />
+                <span className="truncate">{githubLoading ? 'Redirecting…' : 'Continue with GitHub'}</span>
+              </span>
+              <span className="shrink-0 border border-yellow-400 bg-yellow-100 px-1.5 py-0.5 text-[9px] font-bold tracking-[0.08em]">
+                Recommended
+              </span>
+            </button>
+            <button
               onClick={handleGoogle}
               disabled={googleLoading || githubLoading || loading}
               className="w-full flex items-center justify-center gap-3 border-2 border-foreground bg-white py-3 font-mono text-xs uppercase tracking-[0.15em] paper-btn hover:bg-foreground/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <GoogleIcon />
               {googleLoading ? 'Redirecting…' : 'Continue with Google'}
-            </button>
-            <button
-              onClick={handleGitHub}
-              disabled={githubLoading || googleLoading || loading}
-              className="w-full flex items-center justify-center gap-3 border-2 border-foreground bg-white py-3 font-mono text-xs uppercase tracking-[0.15em] paper-btn hover:bg-foreground/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <GithubIcon className="w-4 h-4" />
-              {githubLoading ? 'Redirecting…' : 'Continue with GitHub'}
             </button>
           </div>
 
@@ -253,7 +258,7 @@ export default function SignInPage() {
 
             <button
               type="submit"
-              disabled={loading || googleLoading}
+              disabled={loading || googleLoading || githubLoading}
               className="w-full rounded-none border-2 border-foreground bg-foreground py-3 font-mono text-xs uppercase tracking-[0.2em] text-background hover:bg-background hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed paper-btn-dark"
             >
               {loading ? 'Signing in…' : 'Sign in'}

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { mapMessage } from '@/lib/projects/mappers';
 import type { Database } from '@/lib/supabase/types';
+import { FREE_PLAN_LIMITS, getFreePlanHistoryCutoff } from '@/lib/plan-limits';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -18,11 +19,23 @@ export async function GET(_: Request, context: RouteContext) {
   }
 
   const { id } = await context.params;
-  const { data, error } = await supabase
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('plan')
+    .eq('id', user.id)
+    .maybeSingle();
+  const plan = profile?.plan ?? 'free';
+
+  let query = supabase
     .from('messages')
     .select('*')
-    .eq('project_id', id)
-    .order('created_at', { ascending: true });
+    .eq('project_id', id);
+
+  if (plan === 'free') {
+    query = query.gte('created_at', getFreePlanHistoryCutoff().toISOString());
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: true });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -46,6 +59,10 @@ export async function POST(request: Request, context: RouteContext) {
     return NextResponse.json({ error: 'Message content and role are required.' }, { status: 400 });
   }
 
+  if (body.content.length > 10000) {
+    return NextResponse.json({ error: 'Message is too long. Please keep it under 10,000 characters.' }, { status: 400 });
+  }
+
   // Enforce free plan monthly message limit (only count user-sent messages)
   if (body.role === 'user') {
     const { data: profile } = await supabase
@@ -65,9 +82,9 @@ export async function POST(request: Request, context: RouteContext) {
         .eq('role', 'user')
         .gte('created_at', startOfMonth.toISOString());
 
-      if ((count ?? 0) >= 20) {
+      if ((count ?? 0) >= FREE_PLAN_LIMITS.monthlyMessages) {
         return NextResponse.json(
-          { error: 'You have reached the 20 messages/month limit on the free plan. Upgrade to Pro for unlimited messages.', code: 'MESSAGE_LIMIT' },
+          { error: `You have reached the ${FREE_PLAN_LIMITS.monthlyMessages} messages/month limit on the free plan. Upgrade to Pro for unlimited messages.`, code: 'MESSAGE_LIMIT' },
           { status: 403 },
         );
       }
@@ -88,7 +105,7 @@ export async function POST(request: Request, context: RouteContext) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const { data: project } = await supabase.from('projects').select('message_count').eq('id', id).single();
+  const { data: project } = await supabase.from('projects').select('message_count').eq('id', id).maybeSingle();
   const nextCount = (project?.message_count || 0) + 1;
 
   await supabase

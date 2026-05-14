@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { mapProject } from '@/lib/projects/mappers'
+import { userHasGitHubProvider } from '@/lib/auth/providers'
 
 async function fetchRepoData(owner: string, repo: string, token: string) {
   const headers = {
@@ -64,9 +65,13 @@ export async function POST(
     .from('projects')
     .select('github_owner, github_repo_name')
     .eq('id', id)
-    .single()
+    .maybeSingle()
 
-  if (!project?.github_owner || !project?.github_repo_name) {
+  if (!project) {
+    return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+  }
+
+  if (!project.github_owner || !project.github_repo_name) {
     return NextResponse.json({ error: 'Project has no linked GitHub repo' }, { status: 400 })
   }
 
@@ -74,9 +79,9 @@ export async function POST(
     .from('profiles')
     .select('github_token')
     .eq('id', user.id)
-    .single()
+    .maybeSingle()
 
-  if (!profile?.github_token) {
+  if (!profile?.github_token || !userHasGitHubProvider(user)) {
     return NextResponse.json({ error: 'No GitHub token. Sign in with GitHub first.' }, { status: 403 })
   }
 
@@ -87,10 +92,14 @@ export async function POST(
     .update({ ...repoData, last_synced_at: new Date().toISOString() })
     .eq('id', id)
     .select('*')
-    .single()
+    .maybeSingle()
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  if (!data) {
+    return NextResponse.json({ error: 'Project not found' }, { status: 404 })
   }
 
   return NextResponse.json(mapProject(data))

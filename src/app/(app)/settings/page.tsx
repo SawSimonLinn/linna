@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { FREE_PLAN_LIMITS } from '@/lib/plan-limits';
 
 type PlanInfo = { plan: 'free' | 'pro'; projectCount: number; hasStripeCustomer: boolean };
 
@@ -225,7 +226,7 @@ export default function SettingsPage() {
                   <p className="font-mono text-xs text-foreground/50">
                     {planInfo.plan === 'pro'
                       ? 'Unlimited projects · Unlimited messages · Full chat history'
-                      : `${planInfo.projectCount}/1 project · 20 messages/month · 7-day history`}
+                      : `${planInfo.projectCount}/${FREE_PLAN_LIMITS.projects} projects · ${FREE_PLAN_LIMITS.monthlyMessages} messages/month · ${FREE_PLAN_LIMITS.historyDays}-day history`}
                   </p>
                 </div>
                 {planInfo.plan === 'pro' ? (
@@ -238,9 +239,9 @@ export default function SettingsPage() {
               {/* Feature comparison rows */}
               <div className="border-2 border-foreground divide-y-2 divide-foreground/10 bg-white">
                 {[
-                  { label: 'Projects', free: '1', pro: 'Unlimited' },
-                  { label: 'Messages / month', free: '20', pro: 'Unlimited' },
-                  { label: 'Chat history', free: '7 days', pro: 'Full' },
+                  { label: 'Projects', free: String(FREE_PLAN_LIMITS.projects), pro: 'Unlimited' },
+                  { label: 'Messages / month', free: String(FREE_PLAN_LIMITS.monthlyMessages), pro: 'Unlimited' },
+                  { label: 'Chat history', free: `${FREE_PLAN_LIMITS.historyDays} days`, pro: 'Full' },
                   { label: 'Launch Assistant', free: '—', pro: '✓' },
                   { label: 'Priority support', free: '—', pro: '✓' },
                 ].map(({ label, free, pro }) => (

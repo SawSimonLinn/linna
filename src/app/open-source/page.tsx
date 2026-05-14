@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { LinnaMark } from '@/components/linna-mark';
 import { ArrowRight, Star, GitFork, BookOpen, Terminal, Code2, Globe } from 'lucide-react';
+import { CopyButton } from './copy-button';
+import { Footer } from '@/components/footer';
 
 export const metadata = {
   title: 'Open Source — Linna',
@@ -12,16 +14,16 @@ const STEPS = [
   { cmd: 'git clone https://github.com/sawsimonlinn/linna', label: 'Clone the repo' },
   { cmd: 'cp .env.example .env.local', label: 'Copy env file' },
   { cmd: 'npm install', label: 'Install deps' },
-  { cmd: 'npm run db:push', label: 'Push the schema' },
+  { cmd: '# run schema.sql in your Supabase SQL editor', label: 'Apply schema' },
   { cmd: 'npm run dev', label: 'Start the server' },
 ];
 
 const STACK = [
   { name: 'Next.js', desc: 'App Router, RSC', color: 'bg-foreground text-background' },
   { name: 'Supabase', desc: 'Postgres + Auth', color: 'bg-green-200' },
-  { name: 'Anthropic', desc: 'Claude API', color: 'bg-orange-200' },
+  { name: 'OpenAI', desc: 'GPT-4o via AI SDK', color: 'bg-orange-200' },
   { name: 'Tailwind CSS', desc: 'Styling', color: 'bg-sky-200' },
-  { name: 'Clerk', desc: 'Auth (hosted)', color: 'bg-violet-200' },
+  { name: 'Stripe', desc: 'Billing', color: 'bg-violet-200' },
   { name: 'shadcn/ui', desc: 'Components', color: 'bg-pink-200' },
 ];
 
@@ -91,18 +93,18 @@ export default function OpenSourcePage() {
             <div className="absolute bottom-8 right-1/4 w-14 h-14 bg-sky-200 border-2 border-foreground rotate-3 paper-shadow-sm opacity-70" />
           </div>
           <div className="container mx-auto px-4 relative z-10">
-            <div className="max-w-3xl">
+            <div className="max-w-3xl mx-auto text-center">
               <div className="inline-block bg-green-300 border-2 border-foreground px-3 py-1 text-xs font-bold mb-6 paper-shadow-sm rotate-[-1deg]">
                 OPEN SOURCE · MIT LICENSE
               </div>
               <h1 className="font-headline text-4xl md:text-6xl font-bold mb-6 leading-tight">
                 Free forever<br />if you self-host.
               </h1>
-              <p className="text-foreground/70 text-lg mb-8 max-w-xl leading-relaxed">
+              <p className="text-foreground/70 text-lg mb-8 max-w-xl leading-relaxed mx-auto">
                 Linna&apos;s full source code is on GitHub. Clone it, run it on your own server, modify it however
                 you like. No license fees. No usage limits. It&apos;s yours.
               </p>
-              <div className="flex flex-wrap gap-4">
+              <div className="flex flex-wrap gap-4 justify-center">
                 <Button
                   asChild
                   size="lg"
@@ -114,14 +116,14 @@ export default function OpenSourcePage() {
                   </Link>
                 </Button>
                 <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2 border-2 border-foreground bg-white px-4 py-2 paper-shadow-sm text-sm font-medium">
+                  <Link href="https://github.com/sawsimonlinn/linna" target="_blank" className="flex items-center gap-2 border-2 border-foreground bg-white px-4 py-2 paper-shadow-sm text-sm font-medium hover:paper-shadow hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all duration-150">
                     <Star className="w-4 h-4" />
-                    1.2k stars
-                  </div>
-                  <div className="flex items-center gap-2 border-2 border-foreground bg-white px-4 py-2 paper-shadow-sm text-sm font-medium">
+                    Star it
+                  </Link>
+                  <Link href="https://github.com/sawsimonlinn/linna/fork" target="_blank" className="flex items-center gap-2 border-2 border-foreground bg-white px-4 py-2 paper-shadow-sm text-sm font-medium hover:paper-shadow hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all duration-150">
                     <GitFork className="w-4 h-4" />
-                    94 forks
-                  </div>
+                    Fork it
+                  </Link>
                 </div>
               </div>
             </div>
@@ -130,7 +132,7 @@ export default function OpenSourcePage() {
 
         {/* ─── Self-hosting guide ───────────────────────────────── */}
         <section className="py-20 bg-foreground text-background border-b-2 border-foreground">
-          <div className="container mx-auto px-4 max-w-4xl">
+          <div className="container mx-auto px-4 max-w-4xl text-center">
             <div className="inline-block bg-green-300 text-foreground border-2 border-background/30 px-3 py-1 text-xs font-bold mb-4 paper-shadow-sm">
               SELF-HOSTING GUIDE
             </div>
@@ -146,13 +148,14 @@ export default function OpenSourcePage() {
                     <span className="font-headline font-bold text-background/50 text-sm">{String(i + 1).padStart(2, '0')}</span>
                   </div>
                   {/* Label */}
-                  <div className="flex items-center px-4 py-3 border-r-2 border-background/20 min-w-[160px] hidden sm:flex">
+                  <div className="hidden sm:flex items-center px-4 py-3 border-r-2 border-background/20 min-w-[160px]">
                     <span className="text-xs font-medium text-background/50 uppercase tracking-wide">{step.label}</span>
                   </div>
                   {/* Command */}
                   <div className="flex items-center gap-3 px-4 py-3 flex-1">
                     <Terminal className="w-4 h-4 text-green-400 shrink-0" />
-                    <code className="font-code text-sm text-green-300 break-all">{step.cmd}</code>
+                    <code className="font-code text-sm text-green-300 break-all flex-1">{step.cmd}</code>
+                    <CopyButton text={step.cmd} />
                   </div>
                 </div>
               ))}
@@ -160,8 +163,8 @@ export default function OpenSourcePage() {
 
             <div className="mt-8 border-2 border-background/20 bg-background/5 p-6">
               <p className="text-sm text-background/60 leading-relaxed">
-                <strong className="text-background">You&apos;ll need:</strong> Node.js 18+, a Supabase project (free tier works), and an Anthropic API key.
-                Clerk is optional — you can replace it with any auth provider or roll your own.
+                <strong className="text-background">You&apos;ll need:</strong> Node.js 18+, a Supabase project (free tier works), and an OpenAI API key.
+                Apply the schema by running <code className="font-code text-green-300">supabase/schema.sql</code> in your Supabase SQL editor.
               </p>
             </div>
           </div>
@@ -169,14 +172,14 @@ export default function OpenSourcePage() {
 
         {/* ─── Tech stack ───────────────────────────────────────── */}
         <section className="py-20 bg-white border-b-2 border-foreground">
-          <div className="container mx-auto px-4">
+          <div className="container mx-auto px-4 text-center">
             <div className="inline-block bg-sky-200 border-2 border-foreground px-3 py-1 text-xs font-bold mb-4 paper-shadow-sm">
               TECH STACK
             </div>
             <h2 className="font-headline text-3xl md:text-4xl font-bold mb-12">
               What Linna is built on.
             </h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-w-3xl">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-w-3xl mx-auto">
               {STACK.map((tech) => (
                 <div
                   key={tech.name}
@@ -192,18 +195,18 @@ export default function OpenSourcePage() {
 
         {/* ─── Contribute ───────────────────────────────────────── */}
         <section className="py-20 bg-paper border-b-2 border-foreground">
-          <div className="container mx-auto px-4">
+          <div className="container mx-auto px-4 text-center">
             <div className="inline-block bg-orange-200 border-2 border-foreground px-3 py-1 text-xs font-bold mb-4 paper-shadow-sm">
               CONTRIBUTING
             </div>
             <h2 className="font-headline text-3xl md:text-4xl font-bold mb-12">
               Help make it better.
             </h2>
-            <div className="grid md:grid-cols-2 gap-5 max-w-3xl">
+            <div className="grid md:grid-cols-2 gap-5 max-w-3xl mx-auto">
               {CONTRIBUTE.map((item) => (
                 <div
                   key={item.title}
-                  className={`${item.color} border-2 border-foreground p-6 paper-shadow hover:paper-shadow-sm hover:translate-x-[4px] hover:translate-y-[4px] transition-all duration-150`}
+                  className={`${item.color} border-2 border-foreground p-6 paper-shadow hover:paper-shadow-sm hover:translate-x-[4px] hover:translate-y-[4px] transition-all duration-150 text-left`}
                 >
                   <div className="w-9 h-9 bg-foreground text-background border-2 border-foreground flex items-center justify-center mb-4">
                     {item.icon}
@@ -214,7 +217,7 @@ export default function OpenSourcePage() {
               ))}
             </div>
 
-            <div className="mt-12 border-2 border-foreground bg-white p-8 paper-shadow max-w-3xl">
+            <div className="mt-12 border-2 border-foreground bg-white p-8 paper-shadow max-w-3xl mx-auto text-left">
               <h3 className="font-headline text-xl font-bold mb-3">Contribution guidelines</h3>
               <ul className="space-y-2 text-sm text-foreground/75">
                 <li className="flex items-start gap-2"><span className="mt-0.5 w-1.5 h-1.5 bg-foreground rounded-full shrink-0" />Open an issue before big PRs — let&apos;s align first.</li>
@@ -250,24 +253,7 @@ export default function OpenSourcePage() {
 
       </main>
 
-      {/* ─── Footer ──────────────────────────────────────────────── */}
-      <footer className="bg-paper border-t-2 border-foreground py-10">
-        <div className="container mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-foreground/60">
-          <Link href="/" className="flex items-center gap-2.5">
-            <div className="w-7 h-7 bg-foreground border-2 border-foreground flex items-center justify-center shrink-0">
-              <LinnaMark className="w-3.5 h-3.5 text-background" />
-            </div>
-            <span className="font-headline font-bold text-foreground">Linna</span>
-          </Link>
-          <div className="flex gap-6">
-            <Link href="/" className="hover:underline underline-offset-2">Home</Link>
-            <Link href="/#features" className="hover:underline underline-offset-2">Features</Link>
-            <Link href="/pricing" className="hover:underline underline-offset-2">Pricing</Link>
-            <Link href="https://github.com/sawsimonlinn/linna" className="hover:underline underline-offset-2">GitHub</Link>
-          </div>
-          <span>&copy; 2026 Code Heaven Studio LLC</span>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

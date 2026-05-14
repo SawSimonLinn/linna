@@ -45,12 +45,13 @@ export async function POST(req: NextRequest) {
     if (userId) {
       await supabaseAdmin
         .from('profiles')
-        .update({
+        .upsert({
+          id: userId,
           plan: 'pro',
           stripe_customer_id: customerId,
           stripe_subscription_id: subscriptionId,
-        })
-        .eq('id', userId);
+          updated_at: new Date().toISOString(),
+        });
     }
   }
 

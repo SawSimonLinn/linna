@@ -2,6 +2,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { LinnaMark } from '@/components/linna-mark';
+import { Footer } from '@/components/footer';
 import {
   Zap,
   MessageSquare,
@@ -10,7 +11,11 @@ import {
   History,
   ShieldCheck,
   ArrowRight,
+  Bell,
   Check,
+  Clock3,
+  ListChecks,
+  Target,
 } from 'lucide-react';
 
 function GithubIcon({ className }: { className?: string }) {
@@ -147,13 +152,13 @@ export default async function LandingPage() {
                   <div className="w-3 h-3 rounded-full border-2 border-white/30" />
                 </div>
                 <div className="flex-1 flex justify-center">
-                  <div className="bg-white/10 border border-white/20 px-10 py-1 text-[10px] text-white/60 font-code">
+                  <div className="max-w-[58vw] truncate bg-white/10 border border-white/20 px-3 py-1 text-[9px] text-white/60 font-code sm:max-w-none sm:px-10 sm:text-[10px]">
                     linna.dev/project/my-saas
                   </div>
                 </div>
               </div>
               {/* Mock UI */}
-              <div className="flex h-64 bg-paper/50">
+              <div className="flex h-72 bg-paper/50 sm:h-64">
                 <div className="w-48 border-r-2 border-foreground bg-white p-4 hidden md:block text-left">
                   <div className="w-24 h-4 bg-foreground/10 border border-foreground/20 mb-5" />
                   <div className="space-y-2">
@@ -162,15 +167,105 @@ export default async function LandingPage() {
                     ))}
                   </div>
                 </div>
-                <div className="flex-1 p-6 flex flex-col gap-4 relative">
-                  <div className="self-start bg-sky-100 border-2 border-foreground px-4 py-2 text-sm max-w-[75%] paper-shadow-sm">
+                <div className="flex-1 p-4 sm:p-6 flex flex-col gap-3 sm:gap-4 relative pb-16 sm:pb-6">
+                  <div className="self-start bg-sky-100 border-2 border-foreground px-3 py-2 text-xs leading-5 max-w-[88%] paper-shadow-sm sm:px-4 sm:text-sm sm:max-w-[75%]">
                     Welcome back! You were working on the Supabase integration. Should we finish the auth logic?
                   </div>
-                  <div className="self-end bg-foreground text-background border-2 border-foreground px-4 py-2 text-sm max-w-[65%] paper-shadow-sm">
+                  <div className="self-end bg-foreground text-background border-2 border-foreground px-3 py-2 text-xs leading-5 max-w-[82%] paper-shadow-sm sm:px-4 sm:text-sm sm:max-w-[65%]">
                     Yes, help me write the RLS policies for the projects table.
                   </div>
-                  <div className="absolute bottom-4 left-4 right-4 h-10 bg-white border-2 border-foreground flex items-center px-4 text-foreground/40 text-sm">
+                  <div className="absolute bottom-4 left-4 right-4 min-h-10 bg-white border-2 border-foreground flex items-center px-3 py-2 text-foreground/40 text-xs sm:px-4 sm:text-sm">
                     Ask Linna anything...
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ─── Momentum proof ─────────────────────────────────────── */}
+        <section className="py-20 bg-white border-b-2 border-foreground">
+          <div className="container mx-auto px-4">
+            <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-10">
+              <div>
+                <div className="inline-block bg-pink-200 border-2 border-foreground px-3 py-1 text-xs font-bold mb-4 paper-shadow-sm">
+                  MOMENTUM PROOF
+                </div>
+                <h2 className="font-headline text-3xl md:text-5xl font-bold leading-tight">
+                  Come back to a project<br />that still knows what matters.
+                </h2>
+              </div>
+              <p className="text-foreground/70 max-w-sm text-sm leading-relaxed">
+                Linna surfaces your next action, stale projects, task progress, and recent context before you have to reconstruct it.
+              </p>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-4">
+              <div className="lg:col-span-2 border-2 border-foreground bg-yellow-100 p-5 paper-shadow">
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="w-9 h-9 bg-foreground text-background border-2 border-foreground flex items-center justify-center">
+                    <Target className="w-5 h-5" />
+                  </div>
+                  <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-foreground/55">Next action</p>
+                </div>
+                <h3 className="font-headline text-2xl font-bold mb-2">Finish the Supabase auth callback.</h3>
+                <p className="text-sm leading-relaxed text-foreground/70">
+                  Last blocker: confirm redirect handling after OAuth, then add the reset-password happy path.
+                </p>
+              </div>
+
+              <div className="border-2 border-foreground bg-sky-100 p-5 paper-shadow rotate-[0.3deg]">
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="w-9 h-9 bg-foreground text-background border-2 border-foreground flex items-center justify-center">
+                    <Bell className="w-5 h-5" />
+                  </div>
+                  <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-foreground/55">Inactive nudge</p>
+                </div>
+                <h3 className="font-headline text-xl font-bold mb-2">Billing v2 has been quiet for 9 days.</h3>
+                <p className="text-sm leading-relaxed text-foreground/70">
+                  Pick it back up from the Stripe webhook retry task.
+                </p>
+              </div>
+
+              <div className="border-2 border-foreground bg-green-100 p-5 paper-shadow rotate-[-0.3deg]">
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="w-9 h-9 bg-foreground text-background border-2 border-foreground flex items-center justify-center">
+                    <ListChecks className="w-5 h-5" />
+                  </div>
+                  <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-foreground/55">Task progress</p>
+                </div>
+                <div className="flex items-end justify-between gap-3 mb-3">
+                  <h3 className="font-headline text-3xl font-bold">8 / 13</h3>
+                  <span className="font-mono text-[10px] text-foreground/50 uppercase tracking-[0.15em]">shipped</span>
+                </div>
+                <div className="h-3 border-2 border-foreground bg-white">
+                  <div className="h-full w-[62%] bg-foreground" />
+                </div>
+              </div>
+
+              <div className="lg:col-span-4 border-2 border-foreground bg-paper p-5 paper-shadow-sm">
+                <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 bg-foreground text-background border-2 border-foreground flex items-center justify-center shrink-0">
+                      <Clock3 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-foreground/55 mb-1">Recent context</p>
+                      <h3 className="font-headline text-xl font-bold">The details from your last session stay attached.</h3>
+                    </div>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 md:min-w-[58%]">
+                    {[
+                      ['Stack', 'Next.js + Supabase'],
+                      ['Goal', 'Ship the private beta'],
+                      ['Blocker', 'OAuth redirect edge cases'],
+                      ['Decision', 'Keep Launch Assistant Pro-only'],
+                    ].map(([label, value]) => (
+                      <div key={label} className="border-l-2 border-foreground pl-3">
+                        <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-foreground/40 mb-1">{label}</p>
+                        <p className="text-sm font-bold leading-snug">{value}</p>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -201,7 +296,7 @@ export default async function LandingPage() {
                 {
                   icon: <Zap className="w-5 h-5" />,
                   title: 'Project Memory',
-                  desc: 'Linna remembers your stack, decisions, and goals. Every session picks up exactly where you left off.',
+                  desc: 'Linna remembers your stack, goals, blockers, decisions, and chat history. Every session picks up exactly where you left off.',
                   bg: 'bg-yellow-100',
                   rotate: '',
                 },
@@ -222,14 +317,14 @@ export default async function LandingPage() {
                 {
                   icon: <Layers className="w-5 h-5" />,
                   title: 'Multiple Projects',
-                  desc: 'Manage all your side projects in one place. Switch instantly with full context always loaded.',
+                  desc: 'Manage all your side projects in one place. Switch instantly with each project\'s saved context loaded.',
                   bg: 'bg-pink-100',
                   rotate: 'rotate-[0.3deg]',
                 },
                 {
                   icon: <History className="w-5 h-5" />,
                   title: 'Session History',
-                  desc: 'Scroll back through past conversations. Your decisions, ideas, and breakthroughs are always there.',
+                  desc: 'Scroll back through plan-available conversations. Free keeps 7 days; paid plans keep full history.',
                   bg: 'bg-violet-100',
                   rotate: 'rotate-[-0.3deg]',
                 },
@@ -267,8 +362,8 @@ export default async function LandingPage() {
             <div className="grid md:grid-cols-3 gap-6">
               {[
                 { num: '01', title: 'Create a project', desc: 'Name it, describe it, paste in your tech stack. Takes 60 seconds.' },
-                { num: '02', title: 'Start chatting', desc: 'Ask questions, get help, think out loud. Linna remembers everything.' },
-                { num: '03', title: 'Pick up later', desc: 'Come back tomorrow, next week, whenever. Your context is still there.' },
+                { num: '02', title: 'Start chatting', desc: 'Ask questions, get help, think out loud. Linna keeps the important project context attached.' },
+                { num: '03', title: 'Pick up later', desc: 'Come back tomorrow, next week, whenever. Your next action and recent context are waiting.' },
               ].map((step, i) => (
                 <div key={i} className="relative">
                   <div className="absolute -top-4 -left-4 w-12 h-12 bg-foreground text-background border-2 border-foreground flex items-center justify-center font-headline font-bold text-lg z-10">
@@ -321,51 +416,7 @@ export default async function LandingPage() {
 
       </main>
 
-      {/* ─── Footer ──────────────────────────────────────────────── */}
-      <footer className="bg-paper border-t-2 border-foreground py-14">
-        <div className="container mx-auto px-4 grid grid-cols-2 md:grid-cols-4 gap-10">
-          <div className="col-span-2 md:col-span-1">
-            <Link href="/" className="flex items-center gap-2.5 mb-3">
-              <div className="w-7 h-7 bg-foreground border-2 border-foreground flex items-center justify-center shrink-0">
-                <LinnaMark className="w-3.5 h-3.5 text-background" />
-              </div>
-              <span className="font-headline font-bold text-lg">Linna</span>
-            </Link>
-            <p className="text-sm text-foreground/60 leading-relaxed max-w-[200px]">
-              Project-aware AI for indie devs and solo builders.
-            </p>
-          </div>
-          <div>
-            <h4 className="font-bold text-xs mb-4 tracking-widest">PRODUCT</h4>
-            <ul className="space-y-2 text-sm text-foreground/70">
-              <li><Link href="#features" className="hover:underline underline-offset-2">Features</Link></li>
-              <li><Link href="/pricing" className="hover:underline underline-offset-2">Pricing</Link></li>
-              <li><Link href="#" className="hover:underline underline-offset-2">Changelog</Link></li>
-              <li><Link href="#" className="hover:underline underline-offset-2">Roadmap</Link></li>
-            </ul>
-          </div>
-          <div>
-            <h4 className="font-bold text-xs mb-4 tracking-widest">DEVELOPERS</h4>
-            <ul className="space-y-2 text-sm text-foreground/70">
-              <li><Link href="https://github.com/sawsimonlinn/linna" className="hover:underline underline-offset-2">GitHub</Link></li>
-              <li><Link href="/open-source" className="hover:underline underline-offset-2">Self-hosting</Link></li>
-              <li><Link href="#" className="hover:underline underline-offset-2">API Docs</Link></li>
-            </ul>
-          </div>
-          <div>
-            <h4 className="font-bold text-xs mb-4 tracking-widest">LEGAL</h4>
-            <ul className="space-y-2 text-sm text-foreground/70">
-              <li><Link href="#" className="hover:underline underline-offset-2">Privacy</Link></li>
-              <li><Link href="#" className="hover:underline underline-offset-2">Terms</Link></li>
-              <li><Link href="#" className="hover:underline underline-offset-2">Twitter / X</Link></li>
-              <li><Link href="#" className="hover:underline underline-offset-2">Discord</Link></li>
-            </ul>
-          </div>
-        </div>
-        <div className="container mx-auto px-4 mt-12 pt-8 border-t-2 border-foreground/15 text-center text-xs text-foreground/45">
-          &copy; 2026 Code Heaven Studio LLC. Built by Saw Simon Linn.
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

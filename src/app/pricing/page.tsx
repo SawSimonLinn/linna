@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { LinnaMark } from '@/components/linna-mark';
 import { Check, X, ArrowRight, Zap } from 'lucide-react';
 import { UpgradeButton } from '@/components/upgrade-button';
+import { Footer } from '@/components/footer';
+import { FREE_PLAN_LIMITS } from '@/lib/plan-limits';
 
 export const metadata = {
   title: 'Pricing — Linna',
@@ -11,21 +13,33 @@ export const metadata = {
 };
 
 const FREE_FEATURES = [
-  '1 project',
-  '20 messages / month',
-  '7-day chat history',
+  `${FREE_PLAN_LIMITS.projects} projects`,
+  `${FREE_PLAN_LIMITS.monthlyMessages} messages / month`,
+  `${FREE_PLAN_LIMITS.historyDays}-day chat history`,
   'Project memory',
-  'Context-aware chat',
+  'Context-aware chat (GPT-4o-mini)',
 ];
-const FREE_MISSING = ['Launch Assistant', 'Priority support'];
+const FREE_MISSING = ['Team projects', 'Launch Assistant', 'Priority support'];
 
 const PRO_FEATURES = [
   'Unlimited projects',
   'Unlimited messages',
   'Full chat history',
   'Project memory',
+  'GPT-4o model (2× smarter)',
   'Context-aware chat',
   'Launch Assistant',
+  'Priority support',
+];
+const PRO_MISSING = ['Team projects', 'Shared workspace', 'Admin controls'];
+
+const TEAM_FEATURES = [
+  'Everything in Pro',
+  'Up to 10 team members',
+  'Shared projects & context',
+  'Team workspace',
+  'Admin controls',
+  'Centralized billing',
   'Priority support',
 ];
 
@@ -46,7 +60,7 @@ const FAQ = [
   },
   {
     q: 'What counts as a "message"?',
-    a: 'One message = one request you send to Linna. AI responses do not count. The free plan gives you 20 per month.',
+    a: `One message = one request you send to Linna. AI responses do not count. The free plan gives you ${FREE_PLAN_LIMITS.monthlyMessages} per month.`,
   },
   {
     q: 'Is there a student or open-source discount?',
@@ -115,7 +129,7 @@ export default async function PricingPage() {
         {/* ─── Pricing Cards ───────────────────────────────────── */}
         <section className="py-20 bg-white border-b-2 border-foreground">
           <div className="container mx-auto px-4">
-            <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto items-start">
+            <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-6 max-w-6xl mx-auto items-start">
 
               {/* Free */}
               <div className="border-2 border-foreground bg-[#FFFBF0] p-8 paper-shadow rotate-[-0.4deg]">
@@ -167,6 +181,42 @@ export default async function PricingPage() {
                     <li key={f} className="flex items-center gap-2">
                       <div className="w-5 h-5 bg-green-300 border-2 border-background/30 flex items-center justify-center shrink-0">
                         <Check className="w-3 h-3 text-foreground" />
+                      </div>
+                      {f}
+                    </li>
+                  ))}
+                  {PRO_MISSING.map((f) => (
+                    <li key={f} className="flex items-center gap-2 text-background/30">
+                      <div className="w-5 h-5 border-2 border-background/20 flex items-center justify-center shrink-0">
+                        <X className="w-3 h-3" />
+                      </div>
+                      <span className="line-through">{f}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Team */}
+              <div className="border-2 border-foreground bg-violet-50 p-8 paper-shadow rotate-[-0.3deg] relative">
+                <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-violet-300 text-foreground border-2 border-foreground px-4 py-1 text-xs font-bold paper-shadow-sm whitespace-nowrap">
+                  NEW
+                </div>
+                <div className="inline-block bg-violet-200 border border-foreground/20 px-2 py-0.5 text-xs font-bold mb-6">
+                  TEAM
+                </div>
+                <div className="font-headline text-5xl font-bold mb-1">$49</div>
+                <div className="text-sm text-foreground/60 mb-8">per month, up to 10 seats</div>
+                <Button
+                  asChild
+                  className="w-full border-2 border-foreground bg-violet-500 hover:bg-violet-600 text-white paper-btn font-bold mb-8"
+                >
+                  <Link href="mailto:sawsimonelinn@gmail.com?subject=Team%20Plan">Contact us</Link>
+                </Button>
+                <ul className="space-y-3 text-sm">
+                  {TEAM_FEATURES.map((f) => (
+                    <li key={f} className="flex items-center gap-2">
+                      <div className="w-5 h-5 bg-violet-200 border-2 border-foreground flex items-center justify-center shrink-0">
+                        <Check className="w-3 h-3" />
                       </div>
                       {f}
                     </li>
@@ -266,24 +316,7 @@ export default async function PricingPage() {
 
       </main>
 
-      {/* ─── Footer ──────────────────────────────────────────────── */}
-      <footer className="bg-paper border-t-2 border-foreground py-10">
-        <div className="container mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-foreground/60">
-          <Link href="/" className="flex items-center gap-2.5">
-            <div className="w-7 h-7 bg-foreground border-2 border-foreground flex items-center justify-center shrink-0">
-              <LinnaMark className="w-3.5 h-3.5 text-background" />
-            </div>
-            <span className="font-headline font-bold text-foreground">Linna</span>
-          </Link>
-          <div className="flex gap-6">
-            <Link href="/" className="hover:underline underline-offset-2">Home</Link>
-            <Link href="/#features" className="hover:underline underline-offset-2">Features</Link>
-            <Link href="/open-source" className="hover:underline underline-offset-2">Open Source</Link>
-            <Link href="https://github.com/sawsimonlinn/linna" className="hover:underline underline-offset-2">GitHub</Link>
-          </div>
-          <span>&copy; 2026 Code Heaven Studio LLC</span>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

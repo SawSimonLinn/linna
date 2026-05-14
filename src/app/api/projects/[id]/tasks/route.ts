@@ -49,10 +49,20 @@ export async function POST(request: Request, context: RouteContext) {
     // Save MVP scope on project
     await supabase.from('projects').update({ mvp_scope: body.fromMvp }).eq('id', id);
 
+    const { data: lastTask } = await supabase
+      .from('tasks')
+      .select('order')
+      .eq('project_id', id)
+      .order('order', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const baseOrder = lastTask ? lastTask.order + 1 : 0;
+
     const inserts = output.tasks.map((t, i) => ({
       project_id: id,
       title: t.title,
-      order: i,
+      order: baseOrder + i,
     }));
 
     const { data, error } = await supabase.from('tasks').insert(inserts).select('*');
@@ -73,7 +83,7 @@ export async function POST(request: Request, context: RouteContext) {
     .eq('project_id', id)
     .order('order', { ascending: false })
     .limit(1)
-    .single();
+    .maybeSingle();
 
   const nextOrder = existing ? existing.order + 1 : 0;
 

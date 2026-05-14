@@ -10,27 +10,32 @@ import 'highlight.js/styles/github.css';
 import {
   AlertCircle,
   ArrowRight,
+  Bookmark,
   Check,
   CheckCircle2,
   ChevronLeft,
+  ChevronRight,
   Circle,
   Copy,
+  Download,
   Edit3,
   GitBranch,
   History,
   MessageSquareText,
+  Paperclip,
   Plus,
   RefreshCw,
+  Search,
   Send,
   Settings,
   Sparkles,
   Trash2,
   X,
 } from 'lucide-react';
-import { contextAwareChat } from '@/ai/flows/context-aware-chat-flow';
 import { extractNextAction } from '@/ai/flows/extract-next-action-flow';
 import { generateCodexPrompt } from '@/ai/flows/generate-codex-prompt-flow';
-import type { Message, NewProjectInput, Project, Task } from '@/lib/projects/types';
+import type { ExtractedDecision } from '@/ai/flows/extract-decisions-flow';
+import type { Message, NewProjectInput, Project, ProjectInvitation, ProjectMember, Task } from '@/lib/projects/types';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -60,8 +65,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { FREE_PLAN_LIMITS } from '@/lib/plan-limits';
 
 export default function ProjectChatPage() {
   const { id } = useParams() as { id: string };
@@ -105,6 +112,24 @@ export default function ProjectChatPage() {
   const [inlinePrompt, setInlinePrompt] = useState<string | null>(null);
   const [messageLimitReached, setMessageLimitReached] = useState(false);
   const [promptCopied, setPromptCopied] = useState(false);
+  const [streamingContent, setStreamingContent] = useState('');
+  const [captureTaskMsgId, setCaptureTaskMsgId] = useState<string | null>(null);
+  const [captureTaskInput, setCaptureTaskInput] = useState('');
+  const [historySearch, setHistorySearch] = useState('');
+  const [attachment, setAttachment] = useState('');
+  const [isAttachmentOpen, setIsAttachmentOpen] = useState(false);
+  const [syncNotification, setSyncNotification] = useState<string | null>(null);
+  const [pinnedView, setPinnedView] = useState(false);
+  const [userPlan, setUserPlan] = useState<{ plan: 'free' | 'pro'; monthlyMessageCount: number } | null>(null);
+  const [members, setMembers] = useState<ProjectMember[]>([]);
+  const [pendingInvitations, setPendingInvitations] = useState<ProjectInvitation[]>([]);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [isInviting, setIsInviting] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [pendingDecision, setPendingDecision] = useState<ExtractedDecision | null>(null);
+  const [isApplyingDecision, setIsApplyingDecision] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
 
   const lastAssistantMessage = [...messages].reverse().find((m) => m.role === 'assistant');
 
@@ -138,6 +163,29 @@ export default function ProjectChatPage() {
     });
   };
 
+  const handleApplyDecision = async () => {
+    if (!pendingDecision || !project) return;
+    setIsApplyingDecision(true);
+    const { updates } = pendingDecision;
+    const body: Record<string, string> = {};
+    if (updates.techStack) body.techStack = updates.techStack;
+    if (updates.goals) body.goals = updates.goals;
+    if (updates.blockers) body.blockers = updates.blockers;
+    if (updates.description) body.description = updates.description;
+    if (updates.targetUser) body.targetUser = updates.targetUser;
+    const res = await fetch(`/api/projects/${project.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      const updated = (await res.json()) as Project;
+      setProject(updated);
+    }
+    setPendingDecision(null);
+    setIsApplyingDecision(false);
+  };
+
   const handleSync = async () => {
     if (!project) return;
     setIsSyncing(true);
@@ -149,15 +197,84 @@ export default function ProjectChatPage() {
     setIsSyncing(false);
   };
 
+  const loadMembers = async () => {
+    const res = await fetch(`/api/projects/${id}/members`);
+    if (!res.ok) return;
+    const data = (await res.json()) as { members: ProjectMember[]; pendingInvitations: ProjectInvitation[] };
+    setMembers(data.members);
+    setPendingInvitations(data.pendingInvitations);
+  };
+
+  const handleInvite = async () => {
+    if (!inviteEmail.trim()) return;
+    setIsInviting(true);
+    setInviteError(null);
+    setInviteLink(null);
+    try {
+      const res = await fetch(`/api/projects/${id}/members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: inviteEmail.trim() }),
+      });
+      const body = (await res.json()) as { token?: string; error?: string };
+      if (!res.ok) {
+        setInviteError(body.error ?? 'Failed to create invitation.');
+        return;
+      }
+      if (body.token) {
+        setInviteLink(`${window.location.origin}/invite/${body.token}`);
+      }
+      setInviteEmail('');
+      void loadMembers();
+    } finally {
+      setIsInviting(false);
+    }
+  };
+
+  const handleRemoveMember = async (memberId: string) => {
+    await fetch(`/api/projects/${id}/members/${memberId}`, { method: 'DELETE' });
+    setMembers((prev) => prev.filter((m) => m.id !== memberId));
+  };
+
+  const handleCancelInvitation = async (invitationId: string) => {
+    await fetch(`/api/projects/${id}/invitations/${invitationId}`, { method: 'DELETE' });
+    setPendingInvitations((prev) => prev.filter((inv) => inv.id !== invitationId));
+  };
+
+  const handleExportMarkdown = () => {
+    if (!project || messages.length === 0) return;
+    const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const lines: string[] = [
+      `# ${project.name}`,
+      '',
+      `*Exported from Linna on ${date}*`,
+      '',
+      '---',
+      '',
+    ];
+    for (const msg of messages) {
+      const label = msg.role === 'user' ? '**You**' : '**Linna**';
+      lines.push(label, '', msg.content, '', '---', '');
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${project.name.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-chat.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   useEffect(() => {
     const loadProject = async () => {
       setIsLoadingMessages(true);
       setLoadError(null);
       try {
-        const [projectResponse, messagesResponse, tasksResponse] = await Promise.all([
+        const [projectResponse, messagesResponse, tasksResponse, planResponse] = await Promise.all([
           fetch(`/api/projects/${id}`, { cache: 'no-store' }),
           fetch(`/api/projects/${id}/messages`, { cache: 'no-store' }),
           fetch(`/api/projects/${id}/tasks`, { cache: 'no-store' }),
+          fetch('/api/user/plan', { cache: 'no-store' }),
         ]);
 
         if (!projectResponse.ok) {
@@ -172,15 +289,17 @@ export default function ProjectChatPage() {
           return;
         }
 
-        const [projectData, messagesData, tasksData] = await Promise.all([
+        const [projectData, messagesData, tasksData, planData] = await Promise.all([
           projectResponse.json() as Promise<Project>,
           messagesResponse.json() as Promise<Message[]>,
           tasksResponse.ok ? (tasksResponse.json() as Promise<Task[]>) : Promise.resolve([]),
+          planResponse.ok ? (planResponse.json() as Promise<{ plan: 'free' | 'pro'; monthlyMessageCount: number }>) : Promise.resolve(null),
         ]);
 
         setProject(projectData);
         setMessages(messagesData);
         setTasks(tasksData);
+        if (planData) setUserPlan(planData);
       } catch (error) {
         setLoadError(error instanceof Error ? error.message : 'Failed to load chat');
       } finally {
@@ -194,6 +313,33 @@ export default function ProjectChatPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
   }, [messages]);
+
+  useEffect(() => {
+    if (streamingContent) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [streamingContent]);
+
+  // Auto-sync GitHub if linked and last sync is stale (>30 min)
+  useEffect(() => {
+    if (!project?.githubOwner || !project.githubRepoName) return;
+    const staleCutoff = Date.now() - 30 * 60 * 1000;
+    const lastSync = project.lastSyncedAt ? new Date(project.lastSyncedAt).getTime() : 0;
+    if (lastSync > staleCutoff) return;
+
+    const prevBlockers = project.blockers;
+    fetch(`/api/projects/${project.id}/sync`, { method: 'POST' })
+      .then((res) => res.ok ? res.json() as Promise<typeof project> : null)
+      .then((updated) => {
+        if (!updated) return;
+        setProject(updated);
+        if (updated.blockers !== prevBlockers) {
+          setSyncNotification('GitHub sync found new issues — blockers updated.');
+        }
+      })
+      .catch(() => { /* non-critical */ });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.id]);
 
   const openEdit = () => {
     if (!project) return;
@@ -255,24 +401,35 @@ export default function ProjectChatPage() {
   }, []);
 
   const handleSend = async (overrideText?: string) => {
-    const combined = overrideText ?? input.trim();
-    if (!combined || !project || isLoading) return;
+    const rawText = overrideText ?? input.trim();
+    if (!rawText || !project || isLoading) return;
+
+    const combined = attachment.trim()
+      ? `[context]\n${attachment.trim()}\n[/context]\n\n${rawText}`
+      : rawText;
 
     const userText = combined;
     setInput('');
+    setAttachment('');
+    setIsAttachmentOpen(false);
     setInlinePrompt(null);
     setIsLoading(true);
+    setStreamingContent('');
+
+    // Track messages locally so we can pass them to extractNextAction at the end
+    let localUserMsg: Message | null = null;
+    let localAiMsg: Message | null = null;
 
     try {
-      const userMessageResponse = await fetch(`/api/projects/${id}/messages`, {
+      const response = await fetch(`/api/projects/${id}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: 'user', content: userText }),
+        body: JSON.stringify({ userMessage: userText }),
       });
 
-      if (!userMessageResponse.ok) {
-        if (userMessageResponse.status === 403) {
-          const errData = (await userMessageResponse.json()) as { code?: string };
+      if (!response.ok) {
+        if (response.status === 403) {
+          const errData = (await response.json()) as { code?: string };
           if (errData.code === 'MESSAGE_LIMIT') {
             setMessageLimitReached(true);
             setIsLoading(false);
@@ -280,53 +437,74 @@ export default function ProjectChatPage() {
             return;
           }
         }
-        throw new Error('Failed to save the user message.');
+        throw new Error(`Request failed: ${response.status}`);
       }
 
-      const userMsg = (await userMessageResponse.json()) as Message;
-      setMessages((prev) => [...prev, userMsg]);
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
 
-      const result = await contextAwareChat({
-        projectName: project.name,
-        projectDescription: project.description,
-        techStack: project.techStack,
-        goals: project.goals,
-        blockers: project.blockers,
-        targetUser: project.targetUser,
-        chatHistory: messages.map((m) => ({ role: m.role, content: m.content })),
-        userMessage: userText,
-      });
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      const assistantMessageResponse = await fetch(`/api/projects/${id}/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: 'assistant', content: result.response }),
-      });
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop() ?? '';
 
-      if (!assistantMessageResponse.ok) throw new Error('Failed to save the assistant message.');
+        for (const part of parts) {
+          const line = part.trim();
+          if (!line.startsWith('data: ')) continue;
 
-      const aiMsg = (await assistantMessageResponse.json()) as Message;
-      setMessages((prev) => [...prev, aiMsg]);
-      setProject((curr) =>
-        curr ? { ...curr, lastActive: aiMsg.createdAt, messageCount: curr.messageCount + 2 } : curr,
-      );
+          let event: { type: string; [key: string]: unknown };
+          try {
+            event = JSON.parse(line.slice(6)) as typeof event;
+          } catch {
+            continue;
+          }
 
-      // Background: extract next action from conversation and save to project
-      const allMsgs = [...messages, userMsg, aiMsg];
-      extractNextAction({
-        projectName: project.name,
-        recentMessages: allMsgs.map((m) => ({ role: m.role, content: m.content })),
-      }).then((nextAction) => {
-        if (!nextAction) return;
-        void fetch(`/api/projects/${id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ nextAction }),
-        });
-        setProject((curr) => curr ? { ...curr, nextAction } : curr);
-      }).catch(() => { /* non-critical */ });
+          if (event.type === 'user_message') {
+            localUserMsg = event.message as Message;
+            setMessages((prev) => [...prev, localUserMsg!]);
+          } else if (event.type === 'chunk') {
+            setStreamingContent((prev) => prev + (event.text as string));
+          } else if (event.type === 'done') {
+            localAiMsg = event.message as Message;
+            setMessages((prev) => [...prev, localAiMsg!]);
+            setStreamingContent('');
+            setProject((curr) =>
+              curr
+                ? { ...curr, lastActive: localAiMsg!.createdAt, messageCount: curr.messageCount + 2 }
+                : curr,
+            );
+            if (event.decision) {
+              setPendingDecision(event.decision as ExtractedDecision);
+            }
+          } else if (event.type === 'error') {
+            throw new Error(event.message as string);
+          }
+        }
+      }
+
+      // Background: extract next action
+      if (localUserMsg && localAiMsg) {
+        const allMsgs = [...messages, localUserMsg, localAiMsg];
+        extractNextAction({
+          projectName: project.name,
+          recentMessages: allMsgs.map((m) => ({ role: m.role, content: m.content })),
+        }).then((nextAction) => {
+          if (!nextAction) return;
+          void fetch(`/api/projects/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nextAction }),
+          });
+          setProject((curr) => (curr ? { ...curr, nextAction } : curr));
+        }).catch(() => { /* non-critical */ });
+      }
     } catch (error) {
       console.error('Chat error:', error);
+      setStreamingContent('');
 
       const errorResponse = await fetch(`/api/projects/${id}/messages`, {
         method: 'POST',
@@ -343,6 +521,7 @@ export default function ProjectChatPage() {
       }
     } finally {
       setIsLoading(false);
+      setStreamingContent('');
     }
   };
 
@@ -468,6 +647,35 @@ export default function ProjectChatPage() {
     setIsSettingsOpen(false);
   };
 
+  const handleCaptureTask = async () => {
+    const title = captureTaskInput.trim();
+    if (!title) return;
+    setCaptureTaskMsgId(null);
+    setCaptureTaskInput('');
+    const res = await fetch(`/api/projects/${id}/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title }),
+    });
+    if (!res.ok) return;
+    const task = (await res.json()) as Task;
+    setTasks((prev) => [...prev, task]);
+    setProject((curr) => (curr ? { ...curr, taskCount: curr.taskCount + 1 } : curr));
+  };
+
+  const handlePinMessage = async (messageId: string, currentPinned: boolean) => {
+    const newPinned = !currentPinned;
+    setMessages((prev) => prev.map((m) => m.id === messageId ? { ...m, pinned: newPinned } : m));
+    const res = await fetch(`/api/projects/${id}/messages/${messageId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pinned: newPinned }),
+    });
+    if (!res.ok) {
+      setMessages((prev) => prev.map((m) => m.id === messageId ? { ...m, pinned: currentPinned } : m));
+    }
+  };
+
   if (!project) {
     if (loadError) {
       return (
@@ -482,7 +690,7 @@ export default function ProjectChatPage() {
 
     return (
       <div className="flex h-full flex-col bg-paper">
-        <div className="mx-auto grid h-full w-full max-w-[1600px] flex-1 xl:grid-cols-[minmax(0,1fr)_300px]">
+        <div className={`mx-auto grid h-full w-full max-w-[1600px] flex-1 ${sidebarCollapsed ? 'xl:grid-cols-[minmax(0,1fr)_40px]' : 'xl:grid-cols-[minmax(0,1fr)_300px]'}`}>
           <section className="flex min-h-0 flex-col border-r-2 border-black">
             {/* Header skeleton */}
             <header className="border-b-2 border-black bg-background px-6 py-5">
@@ -496,8 +704,9 @@ export default function ProjectChatPage() {
                   <Skeleton className="h-3 w-64 rounded-none" />
                 </div>
                 <div className="flex gap-2">
+                  <Skeleton className="h-9 w-28 rounded-none" />
                   <Skeleton className="h-9 w-24 rounded-none" />
-                  <Skeleton className="h-9 w-24 rounded-none" />
+                  <Skeleton className="h-9 w-8 rounded-none" />
                 </div>
               </div>
             </header>
@@ -505,7 +714,6 @@ export default function ProjectChatPage() {
             {/* Message skeletons */}
             <div className="flex-1 px-6 py-8">
               <div className="mx-auto w-full max-w-3xl space-y-8">
-                {/* AI message */}
                 <div className="flex justify-start gap-3">
                   <div className="w-[65%] space-y-2">
                     <Skeleton className="h-3 w-10 rounded-none" />
@@ -516,7 +724,6 @@ export default function ProjectChatPage() {
                     </div>
                   </div>
                 </div>
-                {/* User message */}
                 <div className="flex justify-end gap-3">
                   <div className="w-[42%] space-y-2">
                     <div className="flex justify-end">
@@ -528,7 +735,6 @@ export default function ProjectChatPage() {
                     </div>
                   </div>
                 </div>
-                {/* AI message */}
                 <div className="flex justify-start gap-3">
                   <div className="w-[72%] space-y-2">
                     <Skeleton className="h-3 w-10 rounded-none" />
@@ -553,28 +759,39 @@ export default function ProjectChatPage() {
 
           {/* Sidebar skeleton */}
           <aside className="hidden border-l-2 border-black xl:flex xl:flex-col">
-            <div className="border-b-2 border-black px-5 py-5 space-y-4">
-              <div className="flex items-center justify-between">
-                <Skeleton className="h-3 w-16 rounded-none" />
+            {sidebarCollapsed ? (
+              <div className="flex flex-col items-center pt-3">
                 <Skeleton className="h-7 w-7 rounded-none" />
               </div>
-              <div className="flex gap-1.5">
-                <Skeleton className="h-5 w-16 rounded-none" />
-                <Skeleton className="h-5 w-20 rounded-none" />
-                <Skeleton className="h-5 w-14 rounded-none" />
-              </div>
-              <div className="space-y-3 pt-2">
-                <Skeleton className="h-10 w-full rounded-none" />
-                <Skeleton className="h-10 w-full rounded-none" />
-                <Skeleton className="h-10 w-full rounded-none" />
-              </div>
-            </div>
-            <div className="px-5 py-5 space-y-3">
-              <Skeleton className="h-3 w-14 rounded-none" />
-              <Skeleton className="h-20 w-full rounded-none" />
-              <Skeleton className="h-14 w-full rounded-none" />
-              <Skeleton className="h-14 w-full rounded-none" />
-            </div>
+            ) : (
+              <>
+                <div className="border-b-2 border-black px-5 py-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Skeleton className="h-3 w-16 rounded-none" />
+                    <div className="flex gap-1">
+                      <Skeleton className="h-7 w-7 rounded-none" />
+                      <Skeleton className="h-7 w-7 rounded-none" />
+                    </div>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <Skeleton className="h-5 w-16 rounded-none" />
+                    <Skeleton className="h-5 w-20 rounded-none" />
+                    <Skeleton className="h-5 w-14 rounded-none" />
+                  </div>
+                  <div className="space-y-3 pt-2">
+                    <Skeleton className="h-10 w-full rounded-none" />
+                    <Skeleton className="h-10 w-full rounded-none" />
+                    <Skeleton className="h-10 w-full rounded-none" />
+                  </div>
+                </div>
+                <div className="px-5 py-5 space-y-3">
+                  <Skeleton className="h-3 w-14 rounded-none" />
+                  <Skeleton className="h-20 w-full rounded-none" />
+                  <Skeleton className="h-14 w-full rounded-none" />
+                  <Skeleton className="h-14 w-full rounded-none" />
+                </div>
+              </>
+            )}
           </aside>
         </div>
       </div>
@@ -584,7 +801,7 @@ export default function ProjectChatPage() {
   return (
     <>
       <div className="flex h-full flex-col bg-paper">
-        <div className="mx-auto grid h-full w-full max-w-[1600px] flex-1 xl:grid-cols-[minmax(0,1fr)_300px]">
+        <div className={`mx-auto grid h-full w-full max-w-[1600px] flex-1 ${sidebarCollapsed ? 'xl:grid-cols-[minmax(0,1fr)_40px]' : 'xl:grid-cols-[minmax(0,1fr)_300px]'} transition-all duration-200`}>
 
           {/* Chat column */}
           <section className="flex min-h-0 flex-col border-r-2 border-black">
@@ -622,40 +839,85 @@ export default function ProjectChatPage() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  {project.githubOwner && project.githubRepoName && (
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        onClick={handleSync}
-                        disabled={isSyncing}
-                        className="h-9 rounded-none border-2 border-black bg-background font-mono text-xs uppercase tracking-[0.15em] text-black hover:bg-black hover:text-white transition-colors disabled:opacity-50"
-                      >
-                        <GitBranch className={`mr-2 h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                        {isSyncing ? 'Syncing…' : 'Sync GitHub'}
-                      </Button>
-                      {project.lastSyncedAt && (
-                        <span className="font-mono text-[10px] text-black/40 uppercase tracking-[0.15em]">
-                          {formatDistanceToNow(new Date(project.lastSyncedAt), { addSuffix: true })}
+                  <Button
+                    asChild
+                    className="h-9 rounded-none border-2 border-black bg-yellow-300 px-3 font-mono text-xs uppercase tracking-[0.15em] text-black hover:bg-black hover:text-white transition-colors"
+                  >
+                    <Link href={`/project/${id}/launch`}>
+                      <Sparkles className="mr-2 h-3.5 w-3.5" />
+                      Launch Assistant
+                      {userPlan?.plan === 'free' ? (
+                        <span className="ml-2 border border-black/25 px-1.5 py-0.5 text-[9px] leading-none">
+                          Pro
                         </span>
-                      )}
-                    </div>
+                      ) : null}
+                    </Link>
+                  </Button>
+                  {project.githubOwner && project.githubRepoName && (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="outline"
+                            onClick={handleSync}
+                            disabled={isSyncing}
+                            className="h-9 rounded-none border-2 border-black bg-background font-mono text-xs uppercase tracking-[0.15em] text-black hover:bg-black hover:text-white transition-colors disabled:opacity-50"
+                          >
+                            <GitBranch className={`mr-2 h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                            {isSyncing ? 'Syncing…' : 'Sync GitHub'}
+                          </Button>
+                        </TooltipTrigger>
+                        {project.lastSyncedAt && (
+                          <TooltipContent>
+                            <p>Last synced {formatDistanceToNow(new Date(project.lastSyncedAt), { addSuffix: true })}</p>
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
+                    </TooltipProvider>
                   )}
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsSessionHistoryOpen(true)}
-                    className="h-9 rounded-none border-2 border-black bg-background font-mono text-xs uppercase tracking-[0.15em] text-black hover:bg-black hover:text-white transition-colors"
-                  >
-                    <History className="mr-2 h-3.5 w-3.5" />
-                    History
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsSettingsOpen(true)}
-                    className="h-9 rounded-none border-2 border-black bg-background font-mono text-xs uppercase tracking-[0.15em] text-black hover:bg-black hover:text-white transition-colors"
-                  >
-                    <Settings className="mr-2 h-3.5 w-3.5" />
-                    Settings
-                  </Button>
+                  <TooltipProvider>
+                    <div className="flex items-center border-2 border-black">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            onClick={() => setIsSessionHistoryOpen(true)}
+                            className="h-8 w-8 rounded-none p-0 text-black hover:bg-black hover:text-white transition-colors"
+                          >
+                            <History className="h-3.5 w-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent><p>History</p></TooltipContent>
+                      </Tooltip>
+                      <div className="w-px h-5 bg-black/20" />
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            onClick={handleExportMarkdown}
+                            disabled={messages.length === 0}
+                            className="h-8 w-8 rounded-none p-0 text-black hover:bg-black hover:text-white transition-colors disabled:opacity-40"
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent><p>Export</p></TooltipContent>
+                      </Tooltip>
+                      <div className="w-px h-5 bg-black/20" />
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            onClick={() => { setIsSettingsOpen(true); void loadMembers(); }}
+                            className="h-8 w-8 rounded-none p-0 text-black hover:bg-black hover:text-white transition-colors"
+                          >
+                            <Settings className="h-3.5 w-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent><p>Settings</p></TooltipContent>
+                      </Tooltip>
+                    </div>
+                  </TooltipProvider>
                 </div>
               </div>
             </header>
@@ -811,9 +1073,27 @@ export default function ProjectChatPage() {
                                   {message.content}
                                 </ReactMarkdown>
                               </div>
-                            ) : (
-                              <p className="whitespace-pre-wrap text-sm leading-7">{message.content}</p>
-                            )}
+                            ) : (() => {
+                              const attachRe = /^\[context\]\n([\s\S]*?)\n\[\/context\]\n\n([\s\S]*)$/;
+                              const match = message.content.match(attachRe);
+                              if (match) {
+                                return (
+                                  <>
+                                    <details className="mb-2 group/att">
+                                      <summary className="flex cursor-pointer items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.2em] text-white/50 hover:text-white/80 transition-colors list-none">
+                                        <Paperclip className="h-2.5 w-2.5" />
+                                        Attached context
+                                      </summary>
+                                      <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-none border border-white/20 bg-white/10 p-3 font-mono text-[11px] leading-5 text-white/70">
+                                        {match[1]}
+                                      </pre>
+                                    </details>
+                                    <p className="whitespace-pre-wrap text-sm leading-7">{match[2]}</p>
+                                  </>
+                                );
+                              }
+                              return <p className="whitespace-pre-wrap text-sm leading-7">{message.content}</p>;
+                            })()}
                           </div>
 
                           <div className={`flex items-center gap-2 ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
@@ -832,6 +1112,28 @@ export default function ProjectChatPage() {
                                   <Copy className="h-3 w-3" />
                                 )}
                               </button>
+                              {message.role === 'assistant' ? (
+                                <>
+                                  <button
+                                    onClick={() => void handlePinMessage(message.id, message.pinned)}
+                                    className={`flex h-5 w-5 items-center justify-center transition-colors ${message.pinned ? 'text-black/60' : 'text-black/20 hover:text-black/60'}`}
+                                    title={message.pinned ? 'Unpin' : 'Pin as reference'}
+                                  >
+                                    <Bookmark className={`h-3 w-3 ${message.pinned ? 'fill-current' : ''}`} />
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      const suggestion = message.content.replace(/[#*`>\-]/g, '').trim().slice(0, 80);
+                                      setCaptureTaskInput(suggestion);
+                                      setCaptureTaskMsgId(message.id);
+                                    }}
+                                    className="flex h-5 w-5 items-center justify-center text-black/20 transition-colors hover:text-black/60"
+                                    title="Capture as task"
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                  </button>
+                                </>
+                              ) : null}
                               <button
                                 onClick={() => handleDeleteMessage(message.id)}
                                 className="flex h-5 w-5 items-center justify-center text-black/20 transition-colors hover:text-red-500"
@@ -841,6 +1143,35 @@ export default function ProjectChatPage() {
                               </button>
                             </div>
                           </div>
+                          {captureTaskMsgId === message.id ? (
+                            <div className="mt-2 flex items-center gap-1 border-2 border-black bg-background">
+                              <input
+                                autoFocus
+                                type="text"
+                                value={captureTaskInput}
+                                onChange={(e) => setCaptureTaskInput(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') void handleCaptureTask();
+                                  if (e.key === 'Escape') { setCaptureTaskMsgId(null); setCaptureTaskInput(''); }
+                                }}
+                                placeholder="Task title..."
+                                className="flex-1 border-0 bg-transparent px-3 py-1.5 font-mono text-xs placeholder:text-black/25 focus:outline-none"
+                              />
+                              <button
+                                onClick={() => void handleCaptureTask()}
+                                disabled={!captureTaskInput.trim()}
+                                className="border-l-2 border-black px-2 py-1.5 font-mono text-[10px] uppercase tracking-[0.15em] text-black/50 hover:bg-black hover:text-white transition-colors disabled:opacity-30"
+                              >
+                                Add
+                              </button>
+                              <button
+                                onClick={() => { setCaptureTaskMsgId(null); setCaptureTaskInput(''); }}
+                                className="border-l-2 border-black px-2 py-1.5 text-black/30 hover:bg-black hover:text-white transition-colors"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ) : null}
                         </div>
                       </article>
                     ))}
@@ -892,7 +1223,47 @@ export default function ProjectChatPage() {
                       </div>
                     ) : null}
 
-                    {isLoading ? (
+                    {isLoading && streamingContent ? (
+                      <div className="flex justify-start">
+                        <div className="max-w-[85%] md:max-w-[78%] flex flex-col gap-1.5 items-start">
+                          <div className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.2em] text-black/30">
+                            <Sparkles className="h-3 w-3" />
+                            Linna
+                          </div>
+                          <div className="chat-bubble-ai">
+                            <div className="prose-ai">
+                              <ReactMarkdown
+                                rehypePlugins={[rehypeHighlight]}
+                                components={{
+                                  h1: ({ children }) => <h1 className="font-headline text-xl font-black text-black mt-4 mb-2 first:mt-0">{children}</h1>,
+                                  h2: ({ children }) => <h2 className="font-headline text-lg font-black text-black mt-4 mb-2 first:mt-0">{children}</h2>,
+                                  h3: ({ children }) => <h3 className="font-headline text-base font-bold text-black mt-3 mb-1 first:mt-0">{children}</h3>,
+                                  p: ({ children }) => <p className="text-sm leading-7 my-2 first:mt-0 last:mb-0">{children}</p>,
+                                  ul: ({ children }) => <ul className="my-2 space-y-1 list-disc pl-5 text-sm leading-7">{children}</ul>,
+                                  ol: ({ children }) => <ol className="my-2 space-y-1 list-decimal pl-5 text-sm leading-7">{children}</ol>,
+                                  li: ({ children }) => <li className="text-sm leading-7">{children}</li>,
+                                  strong: ({ children }) => <strong className="font-semibold text-black">{children}</strong>,
+                                  em: ({ children }) => <em className="italic">{children}</em>,
+                                  code: ({ className, children, ...props }) => {
+                                    const isBlock = className?.includes('language-');
+                                    if (isBlock) {
+                                      return <code className={`${className ?? ''} block text-[12.5px] leading-6`} {...props}>{children}</code>;
+                                    }
+                                    return <code className="rounded-sm bg-black/8 px-1.5 py-0.5 font-mono text-[12px] text-black" {...props}>{children}</code>;
+                                  },
+                                  pre: ({ children }) => (
+                                    <pre className="my-3 overflow-x-auto border-2 border-black/10 bg-[#f6f8fa] p-4 font-mono text-[12.5px] leading-6 first:mt-0 last:mb-0">{children}</pre>
+                                  ),
+                                }}
+                              >
+                                {streamingContent}
+                              </ReactMarkdown>
+                              <span className="inline-block h-3.5 w-0.5 animate-pulse bg-black/50 ml-0.5 align-middle" />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : isLoading ? (
                       <div className="flex justify-start">
                         <div className="chat-bubble-ai flex items-center gap-2">
                           <div className="h-1.5 w-1.5 animate-bounce bg-black [animation-delay:-0.3s]" />
@@ -923,6 +1294,22 @@ export default function ProjectChatPage() {
               </div>
             ) : null}
 
+            {/* GitHub sync notification */}
+            {syncNotification ? (
+              <div className="flex items-center justify-between border-t-2 border-black bg-sky-50 px-6 py-2">
+                <div className="flex items-center gap-2">
+                  <GitBranch className="h-3 w-3 shrink-0 text-sky-600" />
+                  <span className="font-mono text-[10px] text-sky-800">{syncNotification}</span>
+                </div>
+                <button
+                  onClick={() => setSyncNotification(null)}
+                  className="text-sky-600 hover:text-sky-900 transition-colors"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ) : null}
+
             {/* Input bar */}
             <div className="border-t-2 border-black bg-paper px-6 py-4">
               <div className="mx-auto w-full max-w-3xl">
@@ -938,6 +1325,36 @@ export default function ProjectChatPage() {
                     </button>
                   </div>
                 ) : null}
+                {pendingDecision ? (
+                  <div className="border-2 border-emerald-400 bg-emerald-50 px-4 py-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-6 h-6 bg-emerald-300 border-2 border-foreground flex items-center justify-center shrink-0 mt-0.5">
+                        <Sparkles className="w-3 h-3" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-mono text-xs font-bold text-foreground mb-1">Decision detected</p>
+                        <p className="font-mono text-[11px] text-foreground/70 leading-5 mb-3">{pendingDecision.summary}</p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => void handleApplyDecision()}
+                            disabled={isApplyingDecision}
+                            className="inline-flex items-center gap-1.5 border-2 border-foreground bg-foreground text-background px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.2em] hover:bg-background hover:text-foreground transition-colors disabled:opacity-50"
+                          >
+                            <Check className="w-3 h-3" />
+                            {isApplyingDecision ? 'Updating…' : 'Update project'}
+                          </button>
+                          <button
+                            onClick={() => setPendingDecision(null)}
+                            className="inline-flex items-center gap-1.5 border-2 border-foreground bg-background px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.2em] hover:bg-foreground hover:text-background transition-colors"
+                          >
+                            <X className="w-3 h-3" />
+                            Dismiss
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
                 {messageLimitReached ? (
                   <div className="border-2 border-yellow-400 bg-yellow-50 px-4 py-4">
                     <div className="flex items-start gap-3">
@@ -947,7 +1364,7 @@ export default function ProjectChatPage() {
                       <div className="flex-1 min-w-0">
                         <p className="font-mono text-xs font-bold text-foreground mb-1">Monthly limit reached</p>
                         <p className="font-mono text-[11px] text-foreground/60 leading-5 mb-3">
-                          Free plan allows 20 messages per month. Upgrade to Pro for unlimited messages.
+                          Free plan allows {FREE_PLAN_LIMITS.monthlyMessages} messages per month. Upgrade to Pro for unlimited messages.
                         </p>
                         <Link
                           href="/pricing"
@@ -961,7 +1378,52 @@ export default function ProjectChatPage() {
                   </div>
                 ) : (
                   <>
+                    {/* Attachment panel */}
+                    {isAttachmentOpen ? (
+                      <div className="mb-2 border-2 border-black/20 bg-background">
+                        <div className="flex items-center justify-between border-b border-black/10 px-3 py-1.5">
+                          <div className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.2em] text-black/40">
+                            <Paperclip className="h-2.5 w-2.5" />
+                            Paste context (error log, stack trace, code…)
+                          </div>
+                          <button
+                            onClick={() => { setIsAttachmentOpen(false); setAttachment(''); }}
+                            className="text-black/25 hover:text-black transition-colors"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                        <textarea
+                          autoFocus
+                          rows={5}
+                          placeholder="Paste your code, error log, or stack trace here..."
+                          value={attachment}
+                          onChange={(e) => setAttachment(e.target.value)}
+                          className="w-full resize-none border-0 bg-transparent px-3 py-2 font-mono text-[12px] leading-5 placeholder:text-black/25 focus:outline-none focus:ring-0"
+                        />
+                        {attachment.trim() ? (
+                          <div className="border-t border-black/10 px-3 py-1.5 flex items-center justify-between">
+                            <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-black/30">
+                              {attachment.trim().split('\n').length} lines · will be sent with your next message
+                            </span>
+                            <span className={`font-mono text-[9px] ${(attachment.length + input.length) > 45000 ? 'text-red-500' : 'text-black/25'}`}>
+                              {attachment.length + input.length}/50k
+                            </span>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
                     <div className="flex items-end gap-0 border-2 border-black bg-background">
+                      <button
+                        onClick={() => setIsAttachmentOpen((v) => !v)}
+                        className={`flex h-[52px] w-[44px] shrink-0 items-center justify-center border-r-2 border-black transition-colors ${isAttachmentOpen || attachment ? 'bg-black text-white' : 'text-black/30 hover:text-black'}`}
+                        title="Attach context"
+                      >
+                        <Paperclip className="h-3.5 w-3.5" />
+                        {attachment.trim() ? (
+                          <span className="absolute ml-5 mb-5 h-1.5 w-1.5 rounded-full bg-sky-500" />
+                        ) : null}
+                      </button>
                       <textarea
                         rows={1}
                         placeholder="Message Linna about this project..."
@@ -994,9 +1456,30 @@ export default function ProjectChatPage() {
 
           {/* Context sidebar */}
           <aside className="hidden border-l-2 border-black xl:flex xl:flex-col xl:overflow-y-auto">
+            {sidebarCollapsed ? (
+              <div className="flex flex-col items-center pt-3 gap-3">
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 rounded-none text-black/35 hover:bg-black hover:text-white transition-colors"
+                        onClick={() => setSidebarCollapsed(false)}
+                      >
+                        <ChevronLeft className="h-3.5 w-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="left"><p>Expand sidebar</p></TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+            ) : (
+            <>
             <div className="border-b-2 border-black px-5 py-5">
               <div className="flex items-center justify-between mb-4">
                 <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-black/35">Context</p>
+                <div className="flex items-center gap-1">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -1005,6 +1488,22 @@ export default function ProjectChatPage() {
                 >
                   <Edit3 className="h-3.5 w-3.5" />
                 </Button>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 rounded-none text-black/35 hover:bg-black hover:text-white transition-colors"
+                        onClick={() => setSidebarCollapsed(true)}
+                      >
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="left"><p>Collapse sidebar</p></TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                </div>
               </div>
 
               {project.techStack.split(',').map((t) => t.trim()).filter(Boolean).length > 0 ? (
@@ -1143,56 +1642,236 @@ export default function ProjectChatPage() {
                   </p>
                   <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-black/35 mt-0.5">Created</p>
                 </div>
+                {userPlan?.plan === 'free' ? (
+                  <div className="border-2 border-black/20 p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-black/35">Monthly usage</p>
+                      <p className="font-mono text-[10px] font-semibold text-black">
+                        {userPlan.monthlyMessageCount}<span className="text-black/35">/{FREE_PLAN_LIMITS.monthlyMessages}</span>
+                      </p>
+                    </div>
+                    <Progress
+                      value={(userPlan.monthlyMessageCount / FREE_PLAN_LIMITS.monthlyMessages) * 100}
+                      className={`h-1.5 rounded-none bg-black/10 [&>div]:rounded-none ${userPlan.monthlyMessageCount >= Math.floor(FREE_PLAN_LIMITS.monthlyMessages * 0.9) ? '[&>div]:bg-red-500' : '[&>div]:bg-black'}`}
+                    />
+                    {userPlan.monthlyMessageCount >= Math.floor(FREE_PLAN_LIMITS.monthlyMessages * 0.9) ? (
+                      <p className="font-mono text-[9px] text-red-600 leading-relaxed">
+                        {userPlan.monthlyMessageCount >= FREE_PLAN_LIMITS.monthlyMessages ? 'Limit reached.' : 'Almost at limit.'}{' '}
+                        <a href="/pricing" className="underline hover:no-underline">Upgrade to Pro</a> for unlimited messages.
+                      </p>
+                    ) : (
+                      <p className="font-mono text-[9px] text-black/30 leading-relaxed">
+                        {Math.max(FREE_PLAN_LIMITS.monthlyMessages - userPlan.monthlyMessageCount, 0)} messages left this month.
+                      </p>
+                    )}
+                  </div>
+                ) : userPlan?.plan === 'pro' ? (
+                  <div className="border border-black/15 p-4">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-black/35">Plan</p>
+                    <p className="font-mono text-xs font-semibold text-black mt-0.5">Pro — Unlimited</p>
+                  </div>
+                ) : null}
               </div>
             </div>
+            </>
+            )}
           </aside>
         </div>
       </div>
 
       {/* History sheet */}
-      <Sheet open={isSessionHistoryOpen} onOpenChange={setIsSessionHistoryOpen}>
+      <Sheet open={isSessionHistoryOpen} onOpenChange={(open) => { setIsSessionHistoryOpen(open); if (!open) { setHistorySearch(''); setPinnedView(false); } }}>
         <SheetContent side="right" className="flex w-96 flex-col rounded-none border-l-2 border-black bg-paper shadow-none">
           <SheetHeader className="shrink-0 border-b-2 border-black pb-4">
             <SheetTitle className="font-mono text-xs uppercase tracking-[0.3em] text-black">
               Session History
             </SheetTitle>
           </SheetHeader>
+
+          {/* Tabs: All / Pinned */}
+          <div className="shrink-0 flex border-b-2 border-black">
+            <button
+              onClick={() => setPinnedView(false)}
+              className={`flex-1 py-2 font-mono text-[10px] uppercase tracking-[0.2em] transition-colors ${!pinnedView ? 'bg-black text-white' : 'text-black/40 hover:text-black'}`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => { setPinnedView(true); setHistorySearch(''); }}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 font-mono text-[10px] uppercase tracking-[0.2em] transition-colors ${pinnedView ? 'bg-black text-white' : 'text-black/40 hover:text-black'}`}
+            >
+              <Bookmark className="h-2.5 w-2.5" />
+              Pinned ({messages.filter((m) => m.pinned).length})
+            </button>
+          </div>
+
+          {!pinnedView ? (
+            <div className="shrink-0 border-b border-black/10 py-3">
+              <div className="flex items-center gap-2 border border-black/20 bg-background px-2.5 py-1.5 focus-within:border-black transition-colors">
+                <Search className="h-3 w-3 shrink-0 text-black/30" />
+                <input
+                  type="text"
+                  placeholder="Search messages..."
+                  value={historySearch}
+                  onChange={(e) => setHistorySearch(e.target.value)}
+                  className="flex-1 border-0 bg-transparent font-mono text-[11px] placeholder:text-black/25 focus:outline-none"
+                />
+                {historySearch ? (
+                  <button onClick={() => setHistorySearch('')} className="text-black/30 hover:text-black transition-colors">
+                    <X className="h-3 w-3" />
+                  </button>
+                ) : null}
+              </div>
+              {historySearch ? (
+                <p className="mt-1.5 font-mono text-[9px] text-black/30">
+                  {messages.filter((m) => m.content.toLowerCase().includes(historySearch.toLowerCase())).length} result(s)
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
           <ScrollArea className="mt-4 flex-1 -mx-6 px-6">
-            {sessionGroups.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-center">
-                <History className="mb-3 h-6 w-6 text-black/20" />
-                <p className="font-mono text-xs text-black/30">No messages yet.</p>
-              </div>
-            ) : (
-              <div className="space-y-6 pb-6">
-                {[...sessionGroups].reverse().map((group) => (
-                  <div key={group.date}>
-                    <p className="mb-3 font-mono text-[9px] uppercase tracking-[0.4em] text-black/30">
-                      {group.date}
-                    </p>
-                    <div className="space-y-2">
-                      {group.msgs.map((message) => (
-                        <div
-                          key={message.id}
-                          className={`border px-3 py-2 text-xs leading-relaxed ${
-                            message.role === 'user'
-                              ? 'ml-4 border-black bg-black text-white'
-                              : 'mr-4 border-black/20 bg-background text-black'
-                          }`}
-                        >
-                          <span className="mb-0.5 block font-mono text-[9px] uppercase tracking-[0.3em] opacity-50">
-                            {message.role === 'user' ? 'You' : 'Linna'}
-                          </span>
-                          <p className="line-clamp-3 font-mono text-[11px]">{message.content}</p>
-                          <span className="mt-1 block font-mono text-[9px] opacity-40">
-                            {format(new Date(message.createdAt), 'h:mm a')}
-                          </span>
-                        </div>
-                      ))}
+            {pinnedView ? (
+              (() => {
+                const pinned = messages.filter((m) => m.pinned && m.role === 'assistant');
+                if (pinned.length === 0) {
+                  return (
+                    <div className="flex flex-col items-center justify-center py-20 text-center">
+                      <Bookmark className="mb-3 h-6 w-6 text-black/20" />
+                      <p className="font-mono text-xs text-black/30">No pinned messages yet.</p>
+                      <p className="mt-2 font-mono text-[10px] text-black/20 leading-5">
+                        Pin an AI response to build your reference library.
+                      </p>
                     </div>
+                  );
+                }
+                return (
+                  <div className="space-y-4 pb-6">
+                    {[...pinned].reverse().map((msg) => {
+                      const msgIndex = messages.indexOf(msg);
+                      const precedingUser = msgIndex > 0 && messages[msgIndex - 1].role === 'user'
+                        ? messages[msgIndex - 1]
+                        : null;
+                      return (
+                        <div key={msg.id} className="border-2 border-black/10 bg-background">
+                          {precedingUser ? (
+                            <div className="border-b border-black/10 px-3 py-2">
+                              <span className="block font-mono text-[9px] uppercase tracking-[0.3em] text-black/30 mb-0.5">Q</span>
+                              <p className="font-mono text-[11px] leading-5 text-black/50 line-clamp-2">
+                                {precedingUser.content.replace(/^\[context\]\n[\s\S]*?\n\[\/context\]\n\n/, '')}
+                              </p>
+                            </div>
+                          ) : null}
+                          <div className="px-3 py-2">
+                            <span className="block font-mono text-[9px] uppercase tracking-[0.3em] text-black/30 mb-0.5">A</span>
+                            <p className="font-mono text-[11px] leading-5 text-black line-clamp-6">
+                              {msg.content.replace(/[#*`>]/g, '').trim()}
+                            </p>
+                          </div>
+                          <div className="flex items-center justify-between border-t border-black/10 px-3 py-1.5">
+                            <span className="font-mono text-[9px] text-black/30">
+                              {format(new Date(msg.createdAt), 'MMM d, h:mm a')}
+                            </span>
+                            <button
+                              onClick={() => void handlePinMessage(msg.id, msg.pinned)}
+                              className="font-mono text-[9px] uppercase tracking-[0.2em] text-black/30 hover:text-black transition-colors"
+                            >
+                              Unpin
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                ))}
-              </div>
+                );
+              })()
+            ) : (
+              (() => {
+                const query = historySearch.toLowerCase();
+                const filteredGroups = sessionGroups
+                  .map((group) => ({
+                    ...group,
+                    msgs: group.msgs.filter((m) =>
+                      !query || m.content.toLowerCase().includes(query)
+                    ),
+                  }))
+                  .filter((group) => group.msgs.length > 0);
+
+                if (messages.length === 0) {
+                  return (
+                    <div className="flex flex-col items-center justify-center py-20 text-center">
+                      <History className="mb-3 h-6 w-6 text-black/20" />
+                      <p className="font-mono text-xs text-black/30">No messages yet.</p>
+                    </div>
+                  );
+                }
+
+                if (filteredGroups.length === 0) {
+                  return (
+                    <div className="flex flex-col items-center justify-center py-20 text-center">
+                      <Search className="mb-3 h-6 w-6 text-black/20" />
+                      <p className="font-mono text-xs text-black/30">No messages match your search.</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-6 pb-6">
+                    {[...filteredGroups].reverse().map((group) => (
+                      <div key={group.date}>
+                        <p className="mb-3 font-mono text-[9px] uppercase tracking-[0.4em] text-black/30">
+                          {group.date}
+                        </p>
+                        <div className="space-y-2">
+                          {group.msgs.map((message) => {
+                            const content = message.content;
+                            const highlight = (text: string) => {
+                              if (!query) return <>{text}</>;
+                              const idx = text.toLowerCase().indexOf(query);
+                              if (idx === -1) return <>{text}</>;
+                              return (
+                                <>
+                                  {text.slice(0, idx)}
+                                  <mark className="bg-yellow-200 text-black">{text.slice(idx, idx + query.length)}</mark>
+                                  {text.slice(idx + query.length)}
+                                </>
+                              );
+                            };
+                            const displayContent = message.role === 'user'
+                              ? content.replace(/^\[context\]\n[\s\S]*?\n\[\/context\]\n\n/, '')
+                              : content;
+                            return (
+                              <div
+                                key={message.id}
+                                className={`border px-3 py-2 text-xs leading-relaxed ${
+                                  message.role === 'user'
+                                    ? 'ml-4 border-black bg-black text-white'
+                                    : 'mr-4 border-black/20 bg-background text-black'
+                                }`}
+                              >
+                                <div className="mb-0.5 flex items-center justify-between">
+                                  <span className="font-mono text-[9px] uppercase tracking-[0.3em] opacity-50">
+                                    {message.role === 'user' ? 'You' : 'Linna'}
+                                  </span>
+                                  {message.pinned ? (
+                                    <Bookmark className="h-2.5 w-2.5 fill-current opacity-50" />
+                                  ) : null}
+                                </div>
+                                <p className="line-clamp-3 font-mono text-[11px]">
+                                  {highlight(displayContent.slice(0, 200))}
+                                </p>
+                                <span className="mt-1 block font-mono text-[9px] opacity-40">
+                                  {format(new Date(message.createdAt), 'h:mm a')}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()
             )}
           </ScrollArea>
         </SheetContent>
@@ -1268,6 +1947,120 @@ export default function ProjectChatPage() {
                 <p className="font-mono text-[9px] text-black/30 leading-relaxed">
                   Replaces existing tasks with AI-generated ones from your scope.
                 </p>
+              </div>
+
+              <div className="space-y-3 border-t border-black/10 pt-4">
+                <div className="flex items-center justify-between">
+                  <p className="font-mono text-[9px] uppercase tracking-[0.4em] text-black/30">Team Members</p>
+                  {userPlan?.plan !== 'pro' && (
+                    <span className="border border-black/20 px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-[0.2em] text-black/40">Pro</span>
+                  )}
+                </div>
+
+                {userPlan?.plan === 'pro' ? (
+                  <div className="space-y-3">
+                    {/* Current members */}
+                    {members.length > 0 ? (
+                      <div className="space-y-1">
+                        {members.map((member) => (
+                          <div key={member.id} className="flex items-center justify-between border border-black/10 px-3 py-2">
+                            <div>
+                              <p className="font-mono text-[10px] text-black">{member.email ?? member.userId.slice(0, 8) + '…'}</p>
+                              <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-black/30">{member.role}</p>
+                            </div>
+                            {member.role !== 'owner' && (
+                              <button
+                                onClick={() => void handleRemoveMember(member.id)}
+                                className="text-black/25 hover:text-black transition-colors"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="font-mono text-[10px] text-black/30">No team members yet.</p>
+                    )}
+
+                    {/* Pending invitations */}
+                    {pendingInvitations.length > 0 && (
+                      <div className="space-y-1">
+                        <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-black/25">Pending</p>
+                        {pendingInvitations.map((inv) => (
+                          <div key={inv.id} className="flex items-center justify-between border border-dashed border-black/15 px-3 py-2">
+                            <p className="font-mono text-[10px] text-black/50">{inv.invitedEmail}</p>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => {
+                                  void navigator.clipboard.writeText(`${window.location.origin}/invite/${inv.token}`);
+                                }}
+                                className="font-mono text-[9px] uppercase tracking-[0.15em] text-black/40 hover:text-black transition-colors"
+                                title="Copy invite link"
+                              >
+                                <Copy className="h-3 w-3" />
+                              </button>
+                              <button
+                                onClick={() => void handleCancelInvitation(inv.id)}
+                                className="text-black/25 hover:text-black transition-colors"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Invite form */}
+                    <div className="space-y-2">
+                      <div className="flex items-center border border-black/20 focus-within:border-black transition-colors">
+                        <input
+                          type="email"
+                          placeholder="teammate@example.com"
+                          value={inviteEmail}
+                          onChange={(e) => { setInviteEmail(e.target.value); setInviteError(null); }}
+                          onKeyDown={(e) => { if (e.key === 'Enter') void handleInvite(); }}
+                          className="flex-1 border-0 bg-transparent px-3 py-2 font-mono text-xs placeholder:text-black/25 focus:outline-none"
+                        />
+                        <button
+                          onClick={() => void handleInvite()}
+                          disabled={isInviting || !inviteEmail.trim()}
+                          className="shrink-0 border-l border-black/20 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.15em] text-black/50 hover:text-black disabled:pointer-events-none transition-colors"
+                        >
+                          {isInviting ? <RefreshCw className="h-3 w-3 animate-spin" /> : 'Invite'}
+                        </button>
+                      </div>
+                      {inviteError && (
+                        <p className="font-mono text-[10px] text-red-600">{inviteError}</p>
+                      )}
+                      {inviteLink && (
+                        <div className="border border-black/15 p-3 space-y-1.5">
+                          <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-black/40">Invite link created</p>
+                          <p className="font-mono text-[10px] text-black/60 break-all leading-relaxed">{inviteLink}</p>
+                          <button
+                            onClick={() => void navigator.clipboard.writeText(inviteLink)}
+                            className="font-mono text-[9px] uppercase tracking-[0.15em] text-black hover:underline"
+                          >
+                            Copy link
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="border border-black/10 p-4 space-y-2">
+                    <p className="font-mono text-xs text-black/60">
+                      Invite teammates to collaborate on this project together.
+                    </p>
+                    <a
+                      href="/pricing"
+                      className="inline-block font-mono text-[10px] uppercase tracking-[0.15em] text-black underline hover:no-underline"
+                    >
+                      Upgrade to Pro →
+                    </a>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-3 border-t-2 border-black pt-4">

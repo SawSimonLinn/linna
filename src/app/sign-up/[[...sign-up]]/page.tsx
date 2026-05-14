@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { signUp, signInWithGitHub, signInWithGoogle } from '@/app/actions/auth'
 import { LinnaMark } from '@/components/linna-mark'
-import { Zap, Layers, ShieldCheck, Check, Eye, EyeOff } from 'lucide-react'
+import { Zap, Check, Eye, EyeOff, Bell, History, ListChecks, Target } from 'lucide-react'
 
 function GoogleIcon() {
   return (
@@ -25,10 +25,11 @@ function GithubIcon({ className }: { className?: string }) {
   )
 }
 
-const perks = [
-  { icon: <Zap className="w-4 h-4" />, title: 'Free to start', desc: 'No credit card required. Get your first project running in 60 seconds.' },
-  { icon: <Layers className="w-4 h-4" />, title: 'Multiple projects', desc: 'Manage all your side projects with full context always loaded.' },
-  { icon: <ShieldCheck className="w-4 h-4" />, title: 'Open source', desc: 'Full codebase on GitHub. Self-host or use our cloud — your choice.' },
+const momentumProof = [
+  { icon: <Target className="w-4 h-4" />, label: 'Next action', text: 'Finish the auth callback before billing.' },
+  { icon: <Bell className="w-4 h-4" />, label: 'Inactive nudge', text: 'Billing v2 has been quiet for 9 days.' },
+  { icon: <ListChecks className="w-4 h-4" />, label: 'Task progress', text: '8 of 13 launch tasks shipped.' },
+  { icon: <History className="w-4 h-4" />, label: 'Recent context', text: 'Stack, goal, blocker, and decision stay attached.' },
 ]
 
 export default function SignUpPage() {
@@ -105,31 +106,36 @@ export default function SignUpPage() {
             Give your project<br />a brain.
           </h2>
 
-          <p className="text-background/60 text-sm leading-relaxed mb-12 max-w-sm">
-            Join indie hackers and solo builders who ship faster because they never have to re-explain their project again.
+          <p className="text-background/60 text-sm leading-relaxed mb-8 max-w-sm">
+            Linna remembers your stack, goals, blockers, decisions, and chat history, then turns that context into visible next steps.
           </p>
 
-          <div className="space-y-6">
-            {perks.map((p) => (
-              <div key={p.title} className="flex items-start gap-4">
-                <div className="w-9 h-9 bg-background/10 border-2 border-background/20 flex items-center justify-center shrink-0 mt-0.5">
-                  {p.icon}
+          <div className="border-2 border-background/20 bg-background/5 p-4">
+            <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-background/45 mb-4">
+              Momentum snapshot
+            </p>
+            <div className="space-y-3">
+              {momentumProof.map((item) => (
+                <div key={item.label} className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-background/10 border-2 border-background/20 flex items-center justify-center shrink-0 mt-0.5">
+                    {item.icon}
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm mb-0.5">{item.label}</p>
+                    <p className="text-xs text-background/55 leading-relaxed">{item.text}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-bold text-sm mb-0.5">{p.title}</p>
-                  <p className="text-xs text-background/55 leading-relaxed">{p.desc}</p>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
 
         {/* Stats row */}
-        <div className="z-10 mt-12 grid grid-cols-3 gap-3">
+        <div className="z-10 mt-8 grid grid-cols-3 gap-3">
           {[
-            { value: '100%', label: 'Open source' },
-            { value: 'MIT', label: 'License' },
-            { value: '60s', label: 'To first project' },
+            { value: '3', label: 'Free projects' },
+            { value: '50', label: 'Msgs / month' },
+            { value: '7d', label: 'Free history' },
           ].map((s) => (
             <div key={s.label} className="border-2 border-background/15 bg-background/5 p-4 text-center">
               <p className="font-headline text-2xl font-bold mb-1">{s.value}</p>
@@ -157,8 +163,38 @@ export default function SignUpPage() {
             <p className="font-mono text-xs text-foreground/45">Give your projects a memory.</p>
           </div>
 
+          <div className="lg:hidden mb-6 border-2 border-foreground bg-white p-4 paper-shadow-sm">
+            <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-foreground/45 mb-4">
+              Momentum snapshot
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              {momentumProof.map((item) => (
+                <div key={item.label} className="min-w-0 border-l-2 border-foreground pl-2">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    {item.icon}
+                    <p className="font-bold text-xs leading-tight">{item.label}</p>
+                  </div>
+                  <p className="text-[11px] text-foreground/55 leading-snug">{item.text}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* OAuth buttons */}
           <div className="flex flex-col gap-3 mb-6">
+            <button
+              onClick={handleGitHub}
+              disabled={githubLoading || googleLoading || loading}
+              className="grid w-full grid-cols-[1fr_auto] items-center gap-3 border-2 border-foreground bg-white px-3 py-3 font-mono text-xs uppercase tracking-[0.15em] paper-btn hover:bg-foreground/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span className="flex min-w-0 items-center justify-center gap-3">
+                <GithubIcon className="w-4 h-4 shrink-0" />
+                <span className="truncate">{githubLoading ? 'Redirecting…' : 'Continue with GitHub'}</span>
+              </span>
+              <span className="shrink-0 border border-yellow-400 bg-yellow-100 px-1.5 py-0.5 text-[9px] font-bold tracking-[0.08em]">
+                Recommended
+              </span>
+            </button>
             <button
               onClick={handleGoogle}
               disabled={googleLoading || githubLoading || loading}
@@ -166,14 +202,6 @@ export default function SignUpPage() {
             >
               <GoogleIcon />
               {googleLoading ? 'Redirecting…' : 'Continue with Google'}
-            </button>
-            <button
-              onClick={handleGitHub}
-              disabled={githubLoading || googleLoading || loading}
-              className="w-full flex items-center justify-center gap-3 border-2 border-foreground bg-white py-3 font-mono text-xs uppercase tracking-[0.15em] paper-btn hover:bg-foreground/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <GithubIcon className="w-4 h-4" />
-              {githubLoading ? 'Redirecting…' : 'Continue with GitHub'}
             </button>
           </div>
 

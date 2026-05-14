@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { mapProject } from '@/lib/projects/mappers';
 import type { NewProjectInput } from '@/lib/projects/types';
+import { FREE_PLAN_LIMITS } from '@/lib/plan-limits';
 
 export async function GET() {
   const supabase = await createSupabaseServerClient();
@@ -43,11 +44,12 @@ export async function POST(request: Request) {
   if (plan === 'free') {
     const { count } = await supabase
       .from('projects')
-      .select('id', { count: 'exact', head: true });
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id);
 
-    if ((count ?? 0) >= 1) {
+    if ((count ?? 0) >= FREE_PLAN_LIMITS.projects) {
       return NextResponse.json(
-        { error: 'Free plan is limited to 1 project. Upgrade to Pro for unlimited projects.', code: 'PLAN_LIMIT' },
+        { error: `Free plan is limited to ${FREE_PLAN_LIMITS.projects} projects. Upgrade to Pro for unlimited projects.`, code: 'PLAN_LIMIT' },
         { status: 403 },
       );
     }

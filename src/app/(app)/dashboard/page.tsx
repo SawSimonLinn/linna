@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { formatDistanceToNow } from 'date-fns';
 import {
   ArrowRight,
   ArrowUpRight,
+  CheckCircle2,
   Clock,
   Edit2,
   GitBranch,
@@ -15,6 +17,7 @@ import {
   RefreshCw,
   Search,
   Trash2,
+  X,
   Zap,
 } from 'lucide-react';
 import type { NewProjectInput, Project } from '@/lib/projects/types';
@@ -36,6 +39,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { FREE_PLAN_LIMITS } from '@/lib/plan-limits';
 
 type GithubRepo = {
   id: number;
@@ -49,11 +53,14 @@ type GithubRepo = {
   updatedAt: string;
 };
 
-type PlanInfo = { plan: 'free' | 'pro'; projectCount: number };
+type PlanInfo = { plan: 'free' | 'pro'; projectCount: number; hasGitHubToken: boolean };
 
 export default function Dashboard() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [projects, setProjects] = useState<Project[]>([]);
-  const [planInfo, setPlanInfo] = useState<PlanInfo>({ plan: 'free', projectCount: 0 });
+  const [planInfo, setPlanInfo] = useState<PlanInfo>({ plan: 'free', projectCount: 0, hasGitHubToken: false });
+  const [showUpgradeBanner, setShowUpgradeBanner] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
@@ -70,7 +77,7 @@ export default function Dashboard() {
   const [openingProjectId, setOpeningProjectId] = useState<string | null>(null);
 
   // GitHub import state
-  const [modalTab, setModalTab] = useState<'manual' | 'github'>('github');
+  const [modalTab, setModalTab] = useState<'manual' | 'github'>('manual');
   const [repos, setRepos] = useState<GithubRepo[]>([]);
   const [reposLoading, setReposLoading] = useState(false);
   const [reposError, setReposError] = useState<string | null>(null);
@@ -82,9 +89,43 @@ export default function Dashboard() {
 
   useEffect(() => {
     void loadProjects();
-    void loadRepos();
-    void fetch('/api/user/plan').then((r) => r.json()).then((d) => setPlanInfo(d as PlanInfo));
+
+    const upgradeSuccess = searchParams.get('upgrade') === 'success';
+
+    const fetchPlan = async (attempt = 0): Promise<void> => {
+      const r = await fetch('/api/user/plan');
+      if (!r.ok) return;
+      const d = (await r.json()) as PlanInfo;
+      setPlanInfo(d);
+
+      // If we're coming from Stripe and the webhook hasn't fired yet, retry a few times
+      if (upgradeSuccess && d.plan !== 'pro' && attempt < 5) {
+        await new Promise((res) => setTimeout(res, 1500));
+        return fetchPlan(attempt + 1);
+      }
+
+      if (upgradeSuccess && d.plan === 'pro') {
+        setShowUpgradeBanner(true);
+        router.replace('/dashboard', { scroll: false });
+      }
+    };
+
+    void fetchPlan();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!planInfo.hasGitHubToken) {
+      setRepos([]);
+      setReposError(null);
+      setReposLoading(false);
+      if (modalTab === 'github') setModalTab('manual');
+      return;
+    }
+
+    void loadRepos();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planInfo.hasGitHubToken]);
 
   const loadProjects = async () => {
     const response = await fetch('/api/projects', { cache: 'no-store' });
@@ -101,7 +142,7 @@ export default function Dashboard() {
     setEditingProjectId(null);
     setTechTags([]);
     setTechInput('');
-    setModalTab('github');
+    setModalTab('manual');
     setRepoSearch('');
     setSelectedRepo(null);
     setImportExtras({ goals: '', blockers: '', targetUser: '' });
@@ -146,8 +187,10 @@ export default function Dashboard() {
     if (res.ok) {
       const project = (await res.json()) as Project;
       setProjects((prev) => [project, ...prev]);
+      setPlanInfo((prev) => ({ ...prev, projectCount: prev.projectCount + 1 }));
       setIsModalOpen(false);
       resetProjectForm();
+      router.push(`/project/${project.id}`);
     }
     setImportingRepo(null);
   };
@@ -163,9 +206,10 @@ export default function Dashboard() {
   };
 
   const openNewProject = () => {
-    if (planInfo.plan === 'free' && projects.length >= 1) {
+    if (planInfo.plan === 'free' && projects.length >= FREE_PLAN_LIMITS.projects) {
       setShowUpgradePrompt(true);
     } else {
+      setModalTab('manual');
       setIsModalOpen(true);
     }
   };
@@ -191,10 +235,14 @@ export default function Dashboard() {
       setProjects((prev) => prev.map((p) => (p.id === project.id ? project : p)));
     } else {
       setProjects((prev) => [project, ...prev]);
+      setPlanInfo((prev) => ({ ...prev, projectCount: prev.projectCount + 1 }));
     }
 
     setIsModalOpen(false);
     resetProjectForm();
+    if (!isEditing) {
+      router.push(`/project/${project.id}`);
+    }
   };
 
   const handleEdit = (project: Project) => {
@@ -224,6 +272,15 @@ export default function Dashboard() {
   };
 
   const [searchQuery, setSearchQuery] = useState('');
+
+  const [dismissedNudges, setDismissedNudges] = useState<Set<string>>(new Set());
+
+  const inactiveProjects = useMemo(() => {
+    const tenDaysAgo = Date.now() - 10 * 24 * 60 * 60 * 1000;
+    return projects.filter(
+      (p) => new Date(p.lastActive).getTime() < tenDaysAgo && !dismissedNudges.has(p.id),
+    );
+  }, [projects, dismissedNudges]);
 
   const featuredProjects = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -321,9 +378,20 @@ export default function Dashboard() {
                     </DialogTitle>
                   </DialogHeader>
 
-                  {/* Tab switcher — only show for new projects */}
-                  {!editingProjectId && (
+                  {/* Tab switcher — only show GitHub import when the account has a GitHub token */}
+                  {!editingProjectId && planInfo.hasGitHubToken && (
                     <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+                      <button
+                        onClick={() => setModalTab('manual')}
+                        style={{ flex: 1, minWidth: 0 }}
+                        className={`py-3 font-mono text-[10px] uppercase tracking-[0.2em] border-2 transition-colors ${
+                          modalTab === 'manual'
+                            ? 'border-foreground bg-foreground text-background'
+                            : 'border-foreground/30 bg-transparent text-foreground/50 hover:border-foreground hover:text-foreground'
+                        }`}
+                      >
+                        Manual
+                      </button>
                       <button
                         onClick={() => setModalTab('github')}
                         style={{ flex: 1, minWidth: 0 }}
@@ -336,22 +404,11 @@ export default function Dashboard() {
                         <GitBranch className="w-3 h-3" />
                         GitHub
                       </button>
-                      <button
-                        onClick={() => setModalTab('manual')}
-                        style={{ flex: 1, minWidth: 0 }}
-                        className={`py-3 font-mono text-[10px] uppercase tracking-[0.2em] border-2 transition-colors ${
-                          modalTab === 'manual'
-                            ? 'border-foreground bg-foreground text-background'
-                            : 'border-foreground/30 bg-transparent text-foreground/50 hover:border-foreground hover:text-foreground'
-                        }`}
-                      >
-                        Manual
-                      </button>
                     </div>
                   )}
 
                   {/* GitHub import tab */}
-                  {modalTab === 'github' && !editingProjectId ? (
+                  {planInfo.hasGitHubToken && modalTab === 'github' && !editingProjectId ? (
                     <div style={{ minWidth: 0 }}>
                       {selectedRepo ? (
                         /* Step 2 — fill in project details */
@@ -611,6 +668,64 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* ─── Upgrade success banner ──────────────────────────── */}
+      {showUpgradeBanner && (
+        <div className="px-6 md:px-12 pt-6">
+          <div className="mx-auto max-w-5xl flex items-center justify-between gap-4 border-2 border-foreground bg-foreground text-background px-4 py-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              <p className="font-mono text-xs font-bold uppercase tracking-[0.15em]">
+                You&apos;re on Pro — unlimited projects, messages, and full history.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowUpgradeBanner(false)}
+              className="shrink-0 opacity-60 hover:opacity-100 transition-opacity"
+              aria-label="Dismiss"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Inactivity nudges ───────────────────────────────── */}
+      {inactiveProjects.length > 0 ? (
+        <div className="px-6 md:px-12 pt-6 space-y-2">
+          {inactiveProjects.map((project) => (
+            <div
+              key={project.id}
+              className="mx-auto max-w-5xl flex items-center justify-between gap-4 border-2 border-amber-400 bg-amber-50 px-4 py-3"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <Clock className="h-4 w-4 shrink-0 text-amber-700" />
+                <p className="font-mono text-xs text-foreground/80 truncate">
+                  <span className="font-bold">{project.name}</span>
+                  {' '}hasn't been touched in{' '}
+                  {formatDistanceToNow(new Date(project.lastActive))}.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Link
+                  href={`/project/${project.id}`}
+                  className="inline-flex items-center gap-1 border-2 border-foreground bg-foreground text-background px-3 py-1 font-mono text-[10px] uppercase tracking-[0.2em] hover:bg-background hover:text-foreground transition-colors"
+                >
+                  Jump back in
+                  <ArrowRight className="h-3 w-3" />
+                </Link>
+                <button
+                  onClick={() => setDismissedNudges((prev) => new Set([...prev, project.id]))}
+                  className="border-2 border-foreground bg-background p-1 hover:bg-foreground hover:text-background transition-colors"
+                  aria-label="Dismiss"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
       {/* ─── Project grid / empty state ───────────────────────── */}
       <div className="px-6 py-10 md:px-12">
         <div className="mx-auto max-w-5xl">
@@ -797,7 +912,7 @@ export default function Dashboard() {
               })}
 
               {/* "Add new" ghost card */}
-              {planInfo.plan === 'free' && projects.length >= 1 ? (
+              {planInfo.plan === 'free' && projects.length >= FREE_PLAN_LIMITS.projects ? (
                 <button
                   onClick={() => setShowUpgradePrompt(true)}
                   className="border-2 border-dashed border-yellow-400 bg-yellow-50 min-h-[180px] flex flex-col items-center justify-center gap-3 text-foreground/50 hover:bg-yellow-100 transition-colors duration-150 group"
@@ -849,7 +964,7 @@ export default function Dashboard() {
                 <h2 className="font-headline text-xl font-black">Project limit reached</h2>
               </div>
               <p className="font-mono text-xs text-foreground/60 leading-5">
-                Free plan includes 1 project. Upgrade to Pro for unlimited projects, unlimited messages, and full history.
+                Free plan includes {FREE_PLAN_LIMITS.projects} projects. Upgrade to Pro for unlimited projects, unlimited messages, and full history.
               </p>
             </div>
             <div className="px-6 py-5 space-y-3">
